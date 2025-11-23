@@ -1,3 +1,4 @@
+#include <WiFi.h>
 #define ENABLE_SERIALTCP_DEBUG
 #include <SerialNetworkBridge.h>
 

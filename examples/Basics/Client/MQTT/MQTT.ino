@@ -7,6 +7,7 @@
  * Purpose: Demonstrates how to use with Arduino Mqtt Client library.
  */
 
+#include <WiFi.h>
 #define ENABLE_SERIALTCP_DEBUG // Enable debug prints for SerialTCPClient
 #include <SerialNetworkBridge.h>
 #include <ArduinoMqttClient.h> // Include the standard MQTT library

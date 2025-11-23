@@ -8,6 +8,7 @@
  * (Network Time Protocol request and response).
  */
 
+#include <WiFi.h>
 #define ENABLE_SERIALTCP_DEBUG // Enable debug prints
 #include <SerialNetworkBridge.h> 
 
