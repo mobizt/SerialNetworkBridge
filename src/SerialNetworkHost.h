@@ -842,13 +842,16 @@ public:
 
     /**
      * @brief Sets the StartTLS callback for a specific slot.
+     * @param slot The client slot (0 to MAX_SLOTS-1).
      * @param callback The StartTLSCallback function pointer.
      */
-    void setStartTLSCallback(StartTLSCallback callback)
+    void setStartTLSCallback(int slot, StartTLSCallback callback)
     {
-        if (_tls_callbacks)
-            _tls_callbacks[0] = callback;
-    } // Simplified slot 0 assumption
+        if (slot >= 0 && slot < MAX_SLOTS)
+        {
+            _tls_callbacks[slot] = callback;
+        }
+    }
 
     /**
      * @brief Sets the SetWiFi callback.
