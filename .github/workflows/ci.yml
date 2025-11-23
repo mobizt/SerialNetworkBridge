@@ -13,33 +13,28 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # --- Test Client Examples ---
-          
-          # 1. HTTP GET (Uno)
+
           - name: "Client - HTTP GET (Uno)"
             example: "examples/Basics/Client/ArduinoUNO_HTTP_GET/ArduinoUNO_HTTP_GET.ino"
             board: uno
             lib_deps: ""
 
-          # 2. MQTT (ESP32 for Serial2 support)
+
           - name: "Client - MQTT (ESP32)"
             example: "examples/Basics/Client/MQTT/MQTT.ino"
             board: esp32dev
             lib_deps: "ArduinoMqttClient"
 
-          # 3. UDP NTP (Uno) - NEW
+
           - name: "Client - UDP NTP (Uno)"
-            example: "examples/Basics/Client/UDP_NTP/UDP_NTP.ino"
+            example: "examples/Features//UDP_NTP/Client/Client.ino"
             board: uno
             lib_deps: ""
 
-          # 4. WebSocket Client (Uno) - NEW
           - name: "Client - WebSocket (Uno)"
             example: "examples/Features/Websocket/Client/Client.ino"
             board: uno
             lib_deps: ""
-
-          # --- Test Host Examples on ESP32 ---
           
           - name: "Host - Basic (ESP32)"
             example: "examples/Basics/Host/Host.ino"
