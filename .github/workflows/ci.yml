@@ -26,14 +26,14 @@ jobs:
             lib_deps: "ArduinoMqttClient"
 
 
-          - name: "Client - UDP NTP (Uno)"
+          - name: "Client - UDP NTP (ESP32)"
             example: "examples/Features//UDP_NTP/Client/Client.ino"
-            board: uno
+            board: esp32dev
             lib_deps: ""
 
-          - name: "Client - WebSocket (Uno)"
+          - name: "Client - WebSocket (ESP32)"
             example: "examples/Features/Websocket/Client/Client.ino"
-            board: uno
+            board: esp32dev
             lib_deps: ""
           
           - name: "Host - Basic (ESP32)"
