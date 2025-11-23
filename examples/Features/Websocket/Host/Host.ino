@@ -3,7 +3,7 @@
 #include <WebSocketsClient.h>
 
 #define ENABLE_SERIALTCP_DEBUG
-#include <SerialNetworkHost.h>
+#include <SerialNetworkBridge.h>
 
 const char *ssid = "WIFI_SSID";
 const char *password = "WIFI_PASSWORD";

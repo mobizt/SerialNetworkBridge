@@ -14,7 +14,7 @@
 #define ENABLE_SERIALTCP_CHUNKED_DECODING
 #define ENABLE_SERIALTCP_DEBUG // Enable debug prints for SerialTCPClient
 
-#include <SerialTCPClient.h>
+#include <SerialNetworkBridge.h>
 
 // Serial TCP Client Config
 const int CLIENT_SLOT = 0;       // Corresponding to Network client or SSL client slot 0 on the host

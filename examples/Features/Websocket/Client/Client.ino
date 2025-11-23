@@ -1,9 +1,7 @@
 #define ENABLE_SERIALTCP_DEBUG
-#include <SerialWebsocketClient.h>
-#include <SerialHostManager.h>
+#include <SerialNetworkBridge.h>
 
 SerialWebsocketClient ws(Serial2, 0); // Slot 0
-SerialHostManager manager(Serial2);
 
 void onWsEvent(WSMessageType type, const uint8_t* payload, size_t len) {
     switch(type) {

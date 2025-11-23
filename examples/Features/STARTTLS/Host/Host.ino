@@ -14,7 +14,7 @@
 #include <ESP_SSLClient.h>
 
 #define ENABLE_SERIALTCP_DEBUG // Enable debug prints for SerialNetworkHost
-#include <SerialNetworkHost.h>
+#include <SerialNetworkBridge.h>
 
 // Network Config
 const char *ssid = "DEFAULT_WIFI_SSID";

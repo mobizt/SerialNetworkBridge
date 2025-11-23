@@ -9,8 +9,7 @@
  */
 
 #define ENABLE_SERIALTCP_DEBUG // Enable debug prints
-#include <SerialUDPClient.h> 
-#include <SerialHostManager.h>
+#include <SerialNetworkBridge.h> 
 
 // Serial Configuration
 const int CLIENT_SLOT = 0;

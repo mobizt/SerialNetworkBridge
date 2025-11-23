@@ -10,7 +10,7 @@
 #include <WiFiClientSecure.h>
 
 #define ENABLE_SERIALTCP_DEBUG // Enable debug prints for SerialNetworkHost
-#include <SerialNetworkHost.h>
+#include <SerialNetworkBridge.h>
 
 // --- Persistence Configuration ---
 // For ESP32, we use the Preferences library (NVS) to store WiFi credentials.

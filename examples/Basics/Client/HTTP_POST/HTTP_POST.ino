@@ -7,7 +7,7 @@
  * Purpose: Demonstrates a HTTP POST request.
  */
 #define ENABLE_SERIALTCP_DEBUG // Enable debug prints for SerialTCPClient
-#include <SerialTCPClient.h>
+#include <SerialNetworkBridge.h>
 
 // Seial TCP Client Config
 const int CLIENT_SLOT = 0;       // Coresponding to Network client or SSL client slot 0 on the host

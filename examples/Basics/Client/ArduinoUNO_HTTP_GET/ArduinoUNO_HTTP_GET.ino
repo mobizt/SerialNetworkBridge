@@ -13,7 +13,7 @@
 #define ENABLE_SERIALTCP_DEBUG
 
 #include <SoftwareSerial.h>
-#include <SerialTCPClient.h>
+#include <SerialNetworkBridge.h>
 
 // Configuration
 // RX Pin: 2 (Connect to TX of host device)

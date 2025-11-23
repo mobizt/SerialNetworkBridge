@@ -97,7 +97,7 @@ See the [`examples`](/examples/) folder for full sketches:
 
 ```cpp
 #define ENABLE_SERIALTCP_DEBUG 
-#include <SerialTCPClient.h>
+#include <SerialNetworkBridge.h>
 
 SerialTCPClient client(Serial2, 0 /* slot */); 
 
@@ -127,7 +127,7 @@ void loop() {}
 
 ```cpp
 #define ENABLE_SERIALTCP_DEBUG
-#include <SerialUDPClient.h>
+#include <SerialNetworkBridge.h>
 
 SerialUDPClient udp(Serial2, 1 /* slot */); 
 
@@ -163,7 +163,7 @@ Note: The corresponding Host setup for this example is located in [examples/Feat
 
 ```cpp
 #define ENABLE_SERIALTCP_DEBUG
-#include <SerialWebsocketClient.h>
+#include <SerialNetworkBridge.h>
 
 SerialWebsocketClient ws(Serial2, 2 /* slot */);
 
@@ -206,7 +206,7 @@ The **Host** device acts as the bridge. It requires the `SerialNetworkHost` libr
 #include <WebSocketsClient.h> // Native WS Library
 
 #define ENABLE_SERIALTCP_DEBUG 
-#include <SerialNetworkHost.h>
+#include <SerialNetworkBridge.h>
 
 const char* ssid = "WIFI_SSID";
 const char* pass = "WIFI_PASS";

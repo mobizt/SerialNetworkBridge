@@ -8,7 +8,7 @@
  * commands to remotely control the host.
  */
 #define ENABLE_SERIALTCP_DEBUG // Enable debug prints for SerialHostManager
-#include <SerialHostManager.h>
+#include <SerialNetworkBridge.h>
 
 // Seial Host Manager Config
 // We don't need a slot for global commands

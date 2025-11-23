@@ -13,7 +13,7 @@
 #include <WiFiClientSecure.h>
 
 #define ENABLE_SERIALTCP_DEBUG // Enable debug prints for SerialNetworkHost
-#include <SerialNetworkHost.h>
+#include <SerialNetworkBridge.h>
 
 // Filesystem (e.g., LittleFS) for storing certs
 #include "FS.h"

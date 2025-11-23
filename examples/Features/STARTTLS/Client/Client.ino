@@ -10,7 +10,7 @@
  */
 
 #define ENABLE_SERIALTCP_DEBUG // Enable debug prints for SerialTCPClient
-#include <SerialTCPClient.h>
+#include <SerialNetworkBridge.h>
 
 // Serial TCP Client Config
 const int CLIENT_SLOT = 0; // Coresponding to slot 0 on host device which supports STARTTLS

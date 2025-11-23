@@ -10,7 +10,7 @@
 #include <WiFiUdp.h> // Native WiFi UDP client
 
 #define ENABLE_SERIALTCP_DEBUG // Enable debug prints for SerialNetworkHost
-#include <SerialNetworkHost.h> // Use the new Host name
+#include <SerialNetworkBridge.h> // Use the new Host name
 
 // Network Config
 const char* ssid     = "WIFI_SSID";

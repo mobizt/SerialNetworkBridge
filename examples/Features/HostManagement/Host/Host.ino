@@ -11,8 +11,9 @@
 #include <WiFi.h>
 
 #define ENABLE_SERIALTCP_DEBUG // Enable debug prints for SerialNetworkHost
-#include <SerialNetworkHost.h>
+#include <SerialNetworkBridge.h>
 #include <WiFiClientSecure.h>
+
 // Network Config
 String current_ssid = "DEFAULT_WiFI_SSID";
 String current_pass = "DEFAULT_WiFI_PASSWORD";

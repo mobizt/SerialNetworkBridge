@@ -5,6 +5,7 @@
 #include "SerialTCPClient.h"
 #include "SerialWebsocketClient.h"
 #include "SerialUDPClient.h"
+#include "SerialNetworkHost.h"
 #include "SerialHostManager.h"
 
 #endif
