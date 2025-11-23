@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.svg" width="600" alt="SerialNetworkBridge Logo">
+  <img src="https://raw.githubusercontent.com/mobizt/SerialNetworkBridge/refs/heads/main/assets/logo.svg" width="600" alt="SerialNetworkBridge Logo">
 </p>
 
 <h1 align="center">SerialNetworkBridge</h1>
@@ -21,7 +21,7 @@
 <p align="center">It is designed for Arduino boards such as AVR, STM32, and Teensy that lack built‑in WiFi or Ethernet, offering a straightforward alternative to firmware‑based solutions. By bridging communication through modules like ESP32, ESP8266, Raspberry Pi Pico W, or MKR WiFi 1010, the library makes network access broadly available. With support for <b>SSL/TLS</b>, <b>WebSockets</b>, and <b>UDP</b>, SerialNetworkBridge enables secure communication without requiring firmware‑level certificate management.</p>
 
 <p align="center">
-  <img src="assets/diagram.svg" alt="SerialNetworkBridge communication flow" width="800"/>
+  <img src="https://raw.githubusercontent.com/mobizt/SerialNetworkBridge/refs/heads/main/assets/diagram.svg" alt="SerialNetworkBridge communication flow" width="800"/>
 </p>
 
 ---
