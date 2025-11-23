@@ -1,0 +1,93 @@
+name: PlatformIO CI
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # --- Test Client Examples ---
+          
+          # 1. HTTP GET (Uno)
+          - name: "Client - HTTP GET (Uno)"
+            example: "examples/Basics/Client/ArduinoUNO_HTTP_GET/ArduinoUNO_HTTP_GET.ino"
+            board: uno
+            lib_deps: ""
+
+          # 2. MQTT (ESP32 for Serial2 support)
+          - name: "Client - MQTT (ESP32)"
+            example: "examples/Basics/Client/MQTT/MQTT.ino"
+            board: esp32dev
+            lib_deps: "ArduinoMqttClient"
+
+          # 3. UDP NTP (Uno) - NEW
+          - name: "Client - UDP NTP (Uno)"
+            example: "examples/Basics/Client/UDP_NTP/UDP_NTP.ino"
+            board: uno
+            lib_deps: ""
+
+          # 4. WebSocket Client (Uno) - NEW
+          - name: "Client - WebSocket (Uno)"
+            example: "examples/Features/Websocket/Client/Client.ino"
+            board: uno
+            lib_deps: ""
+
+          # --- Test Host Examples on ESP32 ---
+          
+          - name: "Host - Basic (ESP32)"
+            example: "examples/Basics/Host/Host.ino"
+            board: esp32dev
+            lib_deps: ""
+
+          - name: "Host - Secure Connection (ESP32)"
+            example: "examples/Features/SecureConnection/Host/Host.ino"
+            board: esp32dev
+            lib_deps: ""
+
+          - name: "Host - STARTTLS (ESP32)"
+            example: "examples/Features/STARTTLS/Host/Host.ino"
+            board: esp32dev
+            lib_deps: "ESP_SSLClient"
+
+          # Host - WebSocket (ESP32) - NEW
+          # Requires the native WebSockets library
+          - name: "Host - WebSocket (ESP32)"
+            example: "examples/Features/Websocket/Host/Host.ino"
+            board: esp32dev
+            lib_deps: "Links2004/WebSockets"
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install PlatformIO Core
+        run: pip install -U platformio
+
+      - name: Build Example
+        env:
+          PLATFORMIO_CI_SRC: ${{ matrix.example }}
+        run: |
+          if [ -n "${{ matrix.lib_deps }}" ]; then
+            LIB_DEPS_ARG="--project-option=lib_deps=${{ matrix.lib_deps }}"
+          else
+            LIB_DEPS_ARG=""
+          fi
+
+          echo "Building ${{ matrix.example }} for ${{ matrix.board }}..."
+          
+          pio ci "$PLATFORMIO_CI_SRC" \
+            --board=${{ matrix.board }} \
+            --lib="." \
+            $LIB_DEPS_ARG

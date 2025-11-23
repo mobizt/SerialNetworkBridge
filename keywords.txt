@@ -1,0 +1,73 @@
+#######################################
+
+Syntax Coloring Map For SerialNetworkBridge
+
+#######################################
+
+#######################################
+
+Datatypes (KEYWORD1)
+
+#######################################
+
+SerialTCPClient	KEYWORD1
+SerialUDPClient	KEYWORD1
+SerialWebsocketClient	KEYWORD1
+SerialNetworkHost	KEYWORD1
+SerialHostManager	KEYWORD1
+SerialNetworkProtocol	KEYWORD1
+
+#######################################
+
+Methods and Functions (KEYWORD2)
+
+#######################################
+
+setSlot	KEYWORD2
+pingHost	KEYWORD2
+setLocalDebugLevel	KEYWORD2
+setCACert	KEYWORD2
+startTLS	KEYWORD2
+isSSL	KEYWORD2
+availableForWrite	KEYWORD2
+notifyBoot	KEYWORD2
+setTCPClient	KEYWORD2
+setUDPClient	KEYWORD2
+setWebSocketClient	KEYWORD2
+setWebSocketCallback	KEYWORD2
+setStartTLSCallback	KEYWORD2
+setSetWiFiCallback	KEYWORD2
+setConnectNetworkCallback	KEYWORD2
+setRebootCallback	KEYWORD2
+setPreConnectCallback	KEYWORD2
+setWiFi	KEYWORD2
+connectNetwork	KEYWORD2
+disconnectNetwork	KEYWORD2
+isNetworkConnected	KEYWORD2
+rebootHost	KEYWORD2
+setDebugLevel	KEYWORD2
+loop	KEYWORD2
+readChunkSize	KEYWORD2
+beginPacket	KEYWORD2
+endPacket	KEYWORD2
+parsePacket	KEYWORD2
+remoteIP	KEYWORD2
+remotePort	KEYWORD2
+onEvent	KEYWORD2
+sendText	KEYWORD2
+sendBinary	KEYWORD2
+pushWsEvent	KEYWORD2
+
+#######################################
+
+Constants (LITERAL1)
+
+#######################################
+
+WSMessageType	LITERAL1
+WS_EVENT_CONNECTED	LITERAL1
+WS_EVENT_DISCONNECTED	LITERAL1
+WS_FRAME_TEXT	LITERAL1
+WS_FRAME_BINARY	LITERAL1
+WS_FRAME_PONG	LITERAL1
+WS_EVENT_ERROR	LITERAL1

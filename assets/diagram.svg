@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="240" viewBox="0 0 800 240">
+  <style>
+    /* Box styling and text alignment for high contrast on dark backgrounds */
+    .box { rx: 12; ry: 12; stroke: #fff; stroke-width: 1; }
+    .label { font-family: Arial, sans-serif; font-size: 16px; font-weight: bold; text-anchor: middle; dominant-baseline: middle; fill: #fff; }
+    .label-dark { fill: #111; }
+    
+    /* Global line/arrow styling */
+    .arrow { stroke: #333; stroke-width: 2; fill: none; }
+    .arrowhead { fill: #333; }
+    .arrow-label { font-family: Arial, sans-serif; font-size: 14px; fill: #333; text-anchor: middle; }
+    .api-label { font-family: Consolas, monospace; font-size: 12px; fill: #555; text-anchor: middle; }
+    
+    /* Dark mode compatibility for the few light elements */
+    @media (prefers-color-scheme: dark) {
+        .arrow { stroke: #ccc; }
+        .arrowhead { fill: #ccc; }
+        .arrow-label { fill: #ccc; }
+        .api-label { fill: #aaa; }
+    }
+  </style>
+
+  <rect class="box" x="40" y="84" width="200" height="72" fill="#388E8E"/>
+  <text class="label" x="140" y="108">Arduino (Client)</text>
+  <text class="label" x="140" y="132" font-size="12px">SerialTCP / UDP / WS</text>
+
+  <rect class="box" x="300" y="84" width="200" height="72" fill="#F57C00"/>
+  <text class="label" x="400" y="108">ESP32/ESP8266 Host</text>
+  <text class="label" x="400" y="132" font-size="12px">SerialNetworkHost</text>
+
+  <rect class="box" x="560" y="84" width="200" height="72" fill="#D3D3D3" stroke="#555"/>
+  <text class="label label-dark" x="660" y="108" font-weight="bold">TCP / UDP / WS Server</text>
+  <text class="label label-dark" x="660" y="132" font-size="12px">Internet/Cloud</text>
+
+  <line class="arrow" x1="240" y1="120" x2="300" y2="120"/>
+  <polygon class="arrowhead" points="300,120 292,116 292,124"/>
+  
+  <text class="arrow-label" x="270" y="55">Serial Link</text>
+  <text class="api-label" x="270" y="175">Protocol: COBS+CRC</text>
+  <text class="api-label" x="270" y="195">Commands: BEGIN/WRITE/END</text>
+
+  <line class="arrow" x1="500" y1="120" x2="560" y2="120"/>
+  <polygon class="arrowhead" points="560,120 552,116 552,124"/>
+  
+  <text class="arrow-label" x="530" y="55">WiFi/Ethernet</text>
+  <text class="api-label" x="530" y="175">Native Stack</text>
+  <text class="api-label" x="530" y="195">TCP / UDP / WS</text>
+</svg>

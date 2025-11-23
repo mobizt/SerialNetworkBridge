@@ -1,0 +1,84 @@
+<svg width="600" height="280" viewBox="0 0 600 280" xmlns="http://www.w3.org/2000/svg" font-family="Arial, Helvetica, sans-serif">
+  
+  <defs>
+    <linearGradient id="cloudStripes" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#4FC3F7"/>    
+      <stop offset="33%" stop-color="#81C784"/>   
+      <stop offset="66%" stop-color="#FFF176"/>   
+      <stop offset="100%" stop-color="#FFB74D"/> 
+    </linearGradient>
+
+    <g id="customDoubleArrow">
+        <polygon points="93,74 601,74 601,7 804,115 93,115" fill="#FF3D00"/>
+        <polygon points="93,189 803,189 803,231 293,231 293,298" fill="#FF3D00"/>
+    </g>
+
+    <linearGradient id="espGradText" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#F57C00"/>
+        <stop offset="100%" stop-color="#E65100"/>
+    </linearGradient>
+  </defs>
+
+  <text x="300" y="85" font-size="20" fill="#E65100" text-anchor="middle" font-weight="bold">Serial ↔ TCP / UDP / WS</text>
+
+  <g transform="translate(100, 100)">
+    <rect x="-8" y="15" width="10" height="6" fill="#333" />
+    <rect x="-8" y="25" width="10" height="6" fill="#333" />
+    <rect x="-8" y="35" width="10" height="6" fill="#333" />
+    <rect x="-8" y="45" width="10" height="6" fill="#333" />
+    <rect x="20" y="-8" width="6" height="10" fill="#333" />
+    <rect x="30" y="-8" width="6" height="10" fill="#333" />
+    <rect x="40" y="-8" width="6" height="10" fill="#333" />
+    <rect x="50" y="-8" width="6" height="10" fill="#333" />
+    <rect x="20" y="78" width="6" height="10" fill="#333" />
+    <rect x="30" y="78" width="6" height="10" fill="#333" />
+    <rect x="40" y="78" width="6" height="10" fill="#333" />
+    <rect x="50" y="78" width="6" height="10" fill="#333" />
+
+    <rect x="0" y="0" width="80" height="80" rx="15" ry="15" fill="#388E8E"/>
+    <text x="40" y="48" font-size="24" font-weight="bold" fill="white" text-anchor="middle">UNO</text>
+  </g>
+
+  <use href="#customDoubleArrow" transform="translate(220, 140) scale(0.08) translate(-448, -152)"/>
+
+  <g transform="translate(260, 100)">
+    <linearGradient id="espGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#F57C00"/>
+        <stop offset="100%" stop-color="#E65100"/>
+    </linearGradient>
+    <rect x="0" y="0" width="80" height="80" rx="15" ry="15" fill="url(#espGrad)"/>
+
+    <g transform="translate(40, 35)" fill="white">
+      <circle cx="0" cy="15" r="3" />
+      <path d="M-8,8  Q0,0 8,8"  fill="none" stroke="white" stroke-width="4" stroke-linecap="round"/>
+      <path d="M-16,0 Q0,-12 16,0" fill="none" stroke="white" stroke-width="4" stroke-linecap="round"/>
+      <path d="M-24,-8 Q0,-24 24,-8" fill="none" stroke="white" stroke-width="4" stroke-linecap="round"/>
+    </g>
+
+    <text x="40" y="70" font-size="16" font-weight="bold" fill="white" text-anchor="middle">ESP32</text>
+  </g>
+
+  <use href="#customDoubleArrow" transform="translate(380, 140) scale(0.08) translate(-448, -152)"/>
+
+  <g transform="translate(420, 110)">
+    <path d="M 20 45 
+             Q 10 45 5 35 
+             Q 0 25 10 15 
+             Q 15 0 35 0 
+             Q 55 0 60 15 
+             Q 75 15 80 25 
+             Q 85 40 70 45 
+             Z" 
+             transform="scale(1.3)"
+             fill="url(#cloudStripes)" 
+             stroke="black" 
+             stroke-width="3"/>
+  </g>
+
+  <line x1="90" y1="205" x2="510" y2="205" stroke="#333" stroke-width="2"/>
+
+  <text x="300" y="260" text-anchor="middle" font-family="Arial, sans-serif" font-size="44" font-weight="bold">
+    <tspan fill="#424242">Serial</tspan><tspan fill="#388E8E">Network</tspan><tspan fill="url(#espGradText)">Bridge</tspan>
+  </text>
+
+</svg>
