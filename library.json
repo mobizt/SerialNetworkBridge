@@ -1,8 +1,23 @@
 {
   "name": "SerialNetworkBridge",
-  "version": "1.0.1",
-  "description": "A serial-to-network bridge allowing non-networked Arduino boards (Uno, Nano, etc.) to perform TCP, UDP, WebSocket, and SSL/TLS client operations via a WiFi-capable host.",
-  "keywords": ["TCP", "UDP", "WebSocket", "serial", "bridge", "WiFi", "ESP32", "ESP8266", "client", "SSL", "TLS"],
+  "version": "1.0.2",
+  "description": "A serial-to-network bridge allowing non-networked Arduino boards (Uno, Nano, STM32, etc.) to perform TCP, UDP, WebSocket, and SSL/TLS client operations via a WiFi-capable host (ESP32) or a PC/Raspberry Pi (Python).",
+  "keywords": [
+    "TCP",
+    "UDP",
+    "WebSocket",
+    "serial",
+    "bridge",
+    "WiFi",
+    "ESP32",
+    "ESP8266",
+    "client",
+    "SSL",
+    "TLS",
+    "python",
+    "pc-host",
+    "gateway"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/mobizt/SerialNetworkBridge"
@@ -17,5 +32,7 @@
   "license": "MIT",
   "frameworks": "arduino",
   "platforms": "*",
-  "headers": ["SerialNetworkBridge.h"]
+  "headers": [
+    "SerialNetworkBridge.h"
+  ]
 }

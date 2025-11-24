@@ -15,10 +15,12 @@
 using namespace SerialNetworkProtocol;
 
 // Detect WiFi capability across Arduino boards
-#if defined(ESP32) || defined(ESP8266)
+#if defined(WiFi_h) || defined(ESP8266WiFi_h) || defined(WiFiS3_h) || defined(WiFiNINA_h) || defined(WiFi101_h)
 #define HOST_HAS_WIFI
-#elif defined(WiFiS3_h) || defined(WiFiNINA_h) || defined(WiFi101_h) || defined(PICO_CYW43_ARCH_HAS_WIFI)
-#define HOST_HAS_WIFI
+#endif
+
+#if defined(Ethernet_h) || defined(ETH_H)
+#define HOST_HAS_ETHERNET
 #endif
 
 #define MAX_FILENAME_LEN 64
@@ -227,19 +229,64 @@ private:
                     global_success = _connect_net_callback();
                 break;
             case CMD_C_IS_NET_CONNECTED:
-#if defined(HOST_HAS_WIFI)
-                global_success = (WiFi.status() == WL_CONNECTED);
-#else
                 global_success = false;
+
+// check WiFi
+#if defined(HOST_HAS_WIFI)
+                if (WiFi.status() == WL_CONNECTED)
+                {
+                    global_success = true;
+                }
+#endif
+
+// check Ethernet
+#if defined(HOST_HAS_ETHERNET)
+// Standard Arduino Ethernet (W5100/W5500)
+#if defined(Ethernet_h)
+                // Note: linkStatus() requires W5500 or W5100 with modern lib
+                if (Ethernet.linkStatus() == LinkON)
+                {
+                    global_success = true;
+                }
+#endif
+
+// ESP32 Native Ethernet
+#if defined(ETH_H)
+                if (ETH.linkUp())
+                {
+                    global_success = true;
+                }
+#endif
 #endif
                 break;
             case CMD_C_DISCONNECT_NET:
-#if defined(HOST_HAS_WIFI)
-                WiFi.disconnect();
-                global_success = true;
-#else
-                global_success = false;
-#endif
+                global_success = false; // Default to false
+
+                // WiFi Disconnect
+                #if defined(HOST_HAS_WIFI)
+                    if (WiFi.status() != WL_NO_SHIELD) {
+                        WiFi.disconnect(); 
+                        global_success = true;
+                    }
+                #endif
+
+                // Ethernet Disconnect (No-Op)
+                #if defined(HOST_HAS_ETHERNET)
+                    // Ethernet cannot be "disconnected" via software. 
+                    // We check if hardware is present, then return 'true' to signal 
+                    // the command was acknowledged, even though link remains up.
+                    
+                    #if defined(Ethernet_h)
+                        if (Ethernet.hardwareStatus() != EthernetNoHardware) {
+                            global_success = true; 
+                        }
+                    #endif
+
+                    #if defined(ETH_H)
+                        // ESP32 Ethernet is internal/PHY based
+                        global_success = true; 
+                    #endif
+                #endif
                 break;
             }
             sendPacketInternal(global_success ? CMD_H_ACK : CMD_H_NAK, GLOBAL_SLOT_ID, nullptr, 0);

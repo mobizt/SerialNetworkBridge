@@ -15,13 +15,27 @@
 
 <p align="center">
   <b>The Arduino Serial bridge for TCP, UDP, and WebSocket Clients</b><br>
-  Provides a simple way to use advanced network functionality over a serial link, enabling boards without native networking to communicate through a WiFi‑capable device.
+  Enable advanced network functionality on non-networked boards by bridging them to a WiFi‑capable device (ESP32/ESP8266) or a PC via USB.
 </p>
 
-<p align="center">It is designed for Arduino boards such as AVR, STM32, and Teensy that lack built‑in WiFi or Ethernet, offering a straightforward alternative to firmware‑based solutions. By bridging communication through modules like ESP32, ESP8266, Raspberry Pi Pico W, or MKR WiFi 1010, the library makes network access broadly available. With support for <b>SSL/TLS</b>, <b>WebSockets</b>, and <b>UDP</b>, SerialNetworkBridge enables secure communication without requiring firmware‑level certificate management.</p>
+<p align="center">It is designed for Arduino boards such as AVR, STM32, and Teensy that lack built‑in WiFi or Ethernet. By bridging communication through modules like ESP32, Raspberry Pi Pico W, or even a PC running a Python script, the library makes network access broadly available. With support for <b>SSL/TLS</b>, <b>WebSockets</b>, and <b>UDP</b>, SerialNetworkBridge enables secure communication without requiring firmware‑level certificate management.</p>
 
+---
+
+## 🏗 Architecture Options
+
+You can deploy this library in two ways depending on your hardware:
+
+### Option A: Microcontroller Bridge (e.g., ESP32)
+Use a WiFi-capable microcontroller as a dedicated network co-processor.
 <p align="center">
-  <img src="https://raw.githubusercontent.com/mobizt/SerialNetworkBridge/refs/heads/main/assets/diagram.svg" alt="SerialNetworkBridge communication flow" width="800"/>
+  <img src="https://raw.githubusercontent.com/mobizt/SerialNetworkBridge/refs/heads/main/assets/diagram.svg" alt="Microcontroller Bridge Architecture" width="800"/>
+</p>
+
+### Option B: PC / USB Bridge (Python)
+Use your computer or Raspberry Pi as the gateway via the USB cable.
+<p align="center">
+  <img src="https://raw.githubusercontent.com/mobizt/SerialNetworkBridge/refs/heads/main/assets/diagram_pc.svg" alt="PC USB Bridge Architecture" width="800"/>
 </p>
 
 ---
@@ -29,9 +43,10 @@
 ## ✨ Features
 
 - **Multi-Protocol Support:** Bridge **TCP**, **UDP**, and **WebSocket** clients via serial.
-- **Hardware Agnostic:** Designed for any Arduino board with a HardwareSerial port.
+- **Universal Compatibility:** Works with any interface implementing the `Stream` class (`HardwareSerial`, `SoftwareSerial`, `USBSerial`, etc.).
+- **PC Host Mode:** Connect your Arduino directly to a **PC or Raspberry Pi** via USB to access the internet using the provided Python script.
 - **Secure:** Support for **SSL/TLS** (HTTPS/WSS) and **STARTTLS** upgrades handled by the host.
-- **Lightweight:** Header-only design for embedded use.
+- **Performance:** Supports `NeoHWSerial` for high-performance interrupt-driven communication on AVR boards (see `examples/Features/NeoHWSerial_Client`).
 - **Event-Driven:** WebSocket implementation supports async events and callbacks.
 
 ---
@@ -60,13 +75,11 @@ lib_deps =
 - Arduino AVR (Uno, Mega2560, Nano)
 - STM32 series
 - Teensy boards
-- Any board with `HardwareSerial`
+- Any board with a `Stream` interface (Hardware or Software Serial)
 
 **Hosts (Network Bridges):**
-- ESP32 / ESP8266
-- Raspberry Pi Pico W
-- MKR WiFi 1010, MKR 1000 WiFi
-- Arduino UNO WiFi Rev2
+- **Microcontrollers:** ESP32, ESP8266, Raspberry Pi Pico W, MKR WiFi 1010, Arduino UNO WiFi Rev2.
+- **PC / Linux:** Windows, Linux, macOS, or Raspberry Pi (via USB & Python).
 
 ---
 
@@ -89,20 +102,21 @@ Most Arduino AVR boards (Uno, Mega) operate at **5V**, while ESP32/ESP8266 modul
 
 ---
 
-## 🚀 Usage
+## 🚀 Usage: The Client (Your Arduino)
 
-See the [`examples`](/examples/) folder for full sketches:
+These sketches run on your non-networked board (e.g., Arduino Mega). They communicate with a "Host" (see the next section) to access the internet.
 
 ### 1. TCP Client Example (HTTP GET)
 
 ```cpp
+// NOTE: Comment out this line if connecting to PC Host via USB!
 #define ENABLE_SERIALTCP_DEBUG 
 #include <SerialNetworkBridge.h>
 
 SerialTCPClient client(Serial2, 0 /* slot */); 
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(115200); // Debug
   Serial2.begin(115200); // Link to Host
 
   if (client.connect("httpbin.org", 80)) {
@@ -151,15 +165,12 @@ void loop() {
   if (size > 0) {
     Serial.print("Packet received, size: ");
     Serial.println(size);
-    udp.read(packet, 48); // Read response
-    // Process NTP data...
+    // Read response...
   }
 }
 ```
 
 ### 3. WebSocket Client Example
-
-Note: The corresponding Host setup for this example is located in [examples/Features/Websocket/Host](examples/Features/Websocket/Host).
 
 ```cpp
 #define ENABLE_SERIALTCP_DEBUG
@@ -170,11 +181,10 @@ SerialWebsocketClient ws(Serial2, 2 /* slot */);
 void onWsEvent(WSMessageType type, const uint8_t* payload, size_t len) {
     switch(type) {
         case WS_EVENT_CONNECTED:
-            Serial.println("Connected!");
             ws.sendText("Hello World!");
             break;
         case WS_FRAME_TEXT:
-            Serial.printf("Received: %.*s\n", len, payload);
+            Serial.printf("RX: %.*s\n", len, payload);
             break;
     }
 }
@@ -184,72 +194,73 @@ void setup() {
   Serial2.begin(115200);
   
   ws.onEvent(onWsEvent);
-  // Connect SSL (WSS)
   ws.connect("socketsbay.com", 443, "/wss/v2/1/demo/", true);
 }
 
 void loop() {
-  ws.loop(); // Essential for event processing
+  ws.loop(); // Essential
 }
 ```
 
 ---
 
-## 🧩 Host Setup (ESP32 Example)
+## 🧩 Host Setup (Choose One)
 
-The **Host** device acts as the bridge. It requires the `SerialNetworkHost` library and definitions for the native clients (TCP, UDP, WebSocket).
+You need **one** of the following acting as the bridge.
+
+### Option A: Microcontroller Host (ESP32/ESP8266)
+
+Upload the **Host** sketch to an ESP32 or ESP8266. This device connects to WiFi and forwards traffic from the Serial port.
 
 ```cpp
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <WiFiUdp.h>
 #include <WebSocketsClient.h> // Native WS Library
-
 #define ENABLE_SERIALTCP_DEBUG 
 #include <SerialNetworkBridge.h>
-
-const char* ssid = "WIFI_SSID";
-const char* pass = "WIFI_PASS";
 
 // Native Clients
 WiFiClientSecure ssl_client;
 WiFiUDP udp_client;
 WebSocketsClient ws_client;
 
-// Bridge Manager
-SerialNetworkHost host(Serial2);
-
-// Callback to translate Serial commands to Native WS calls
-bool onWsCommand(int slot, uint8_t cmd, const uint8_t *payload, size_t len) {
-    if (slot != 2) return false; // We assigned Slot 2 to WS
-    // ... Implementation details in examples/Features/Websocket/Host ...
-    return true;
-}
+SerialNetworkHost host(Serial2); // Serial Port connected to Client
 
 void setup() {
   Serial.begin(115200);
   Serial2.begin(115200, SERIAL_8N1, 16, 17);
-
-  WiFi.begin(ssid, pass);
-  while (WiFi.status() != WL_CONNECTED) delay(500);
+  WiFi.begin("SSID", "PASS");
   
   ssl_client.setInsecure();
 
   // Register Clients to Slots
-  host.setTCPClient(&ssl_client, 0); // Slot 0: TCP
-  host.setUDPClient(&udp_client, 1); // Slot 1: UDP
-  host.setWebSocketClient(&ws_client, 2); // Slot 2: WS
+  host.setTCPClient(&ssl_client, 0); 
+  host.setUDPClient(&udp_client, 1); 
+  host.setWebSocketClient(&ws_client, 2); 
   
-  host.setWebSocketCallback(onWsCommand); // Register WS Handler
-
   host.notifyBoot();
 }
 
 void loop() {
-  host.loop(); // Handle Serial Traffic
+  host.loop();      // Handle Serial Traffic
   ws_client.loop(); // Handle WS Traffic
 }
 ```
+
+### Option B: PC / Raspberry Pi Host (Python)
+
+You can use your computer as the bridge via the USB cable!
+
+1.  **Arduino Setup:** * Use `Serial` (USB) for the client connection.
+    * **Disable Debugging:** Comment out `#define ENABLE_SERIALTCP_DEBUG`.
+2.  **PC Setup:**
+    * Install Python 3.7+.
+    * Navigate to `examples/Features/PC_USB_Host`.
+    * Run the installer script (`install_libs.bat` or `install_libs.sh`).
+    * Run the bridge script (`run.bat` or `run.sh`).
+
+*See [`examples/Features/PC_USB_Host`](examples/Features/PC_USB_Host) for detailed instructions.*
 
 ---
 
@@ -289,12 +300,6 @@ void loop() {
 
 This library is released under the **MIT License**.  
 See [LICENSE](LICENSE) for details.
-
----
-
-## 🙌 Contributing
-
-Pull requests are welcome! Please open an issue first to discuss proposed changes or enhancements.
 
 ---
 
