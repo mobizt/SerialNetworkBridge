@@ -11,7 +11,7 @@ import websocket  # pip install websocket-client
 # ==========================================
 #  CONFIGURATION
 # ==========================================
-SERIAL_PORT = 'COM3'   # Update this!
+SERIAL_PORT = 'COM3'   # Update this to match your port
 BAUD_RATE = 115200
 
 # ==========================================
@@ -111,6 +111,8 @@ class PySerialNetworkHost:
         if self.session_id == 0: self.session_id = 1
         
         print(f"Bridge started on {port} @ {baud_rate}. Session: {self.session_id:04X}")
+        # Enable trace to see internal websocket errors if needed
+        # websocket.enableTrace(True) 
         self.notify_boot()
 
     def notify_boot(self):
@@ -127,9 +129,9 @@ class PySerialNetworkHost:
             self.ser.write(encoded)
             # self.ser.flush() 
 
-    # --------------------------------------------------------------------------
+    #-----------------------------------------------------------------------
     # TCP Logic
-    # --------------------------------------------------------------------------
+    #-----------------------------------------------------------------------
     def tcp_rx_thread(self, slot_id, sock):
         """
         Reads from internet, sends to Arduino, and WAITS for Arduino ACK.
@@ -183,9 +185,9 @@ class PySerialNetworkHost:
             context.verify_mode = ssl.CERT_NONE
         return context.wrap_socket(sock, server_hostname=hostname)
 
-    # --------------------------------------------------------------------------
+    #-----------------------------------------------------------------------
     # UDP Logic
-    # --------------------------------------------------------------------------
+    #-----------------------------------------------------------------------
     def udp_rx_thread(self, slot_id, sock):
         while self.udp_sockets[slot_id] == sock and self.running:
             try:
@@ -194,9 +196,9 @@ class PySerialNetworkHost:
             except socket.timeout: continue
             except: break
 
-    # --------------------------------------------------------------------------
+    #-----------------------------------------------------------------------
     # WebSocket Logic
-    # --------------------------------------------------------------------------
+    #-----------------------------------------------------------------------
     def start_ws(self, slot, host, port, path, use_ssl):
         scheme = "wss" if use_ssl else "ws"
         url = f"{scheme}://{host}:{port}{path}"
@@ -227,20 +229,26 @@ class PySerialNetworkHost:
                                     on_close=on_close)
         
         self.ws_clients[slot] = ws
-        wst = threading.Thread(target=ws.run_forever)
+        
+        # FIX: Added sslopt to ignore cert verification on PC
+        run_kwargs = {}
+        if use_ssl:
+             run_kwargs = {"sslopt": {"cert_reqs": ssl.CERT_NONE}}
+
+        wst = threading.Thread(target=ws.run_forever, kwargs=run_kwargs)
         wst.daemon = True
         wst.start()
 
-    # --------------------------------------------------------------------------
+    #-----------------------------------------------------------------------
     # Command Processor
-    # --------------------------------------------------------------------------
+    #-----------------------------------------------------------------------
     def process_command(self, packet):
         if len(packet) < 2: return
         cmd, slot = packet[0], packet[1]
         payload = packet[2:]
         success = False
 
-        # --- GLOBAL ---
+        # GLOBAL
         if cmd == CMD_C_PING_HOST:
             self.send_packet(CMD_H_PING_RESPONSE, GLOBAL_SLOT_ID)
             return
@@ -250,7 +258,7 @@ class PySerialNetworkHost:
             self.send_packet(CMD_H_ACK, GLOBAL_SLOT_ID)
             return
 
-        # --- TCP ---
+        # TCP
         if cmd == CMD_C_CONNECT_HOST:
             try:
                 use_ssl = bool(payload[0])
@@ -260,7 +268,7 @@ class PySerialNetworkHost:
                 
                 print(f"TCP Connect ({'SSL' if use_ssl else 'Plain'}) -> {host}:{port}")
                 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                s.settimeout(2.0)
+                s.settimeout(10)
                 
                 if use_ssl:
                     s = self.wrap_socket_ssl(s, host, self.tcp_ca_certs[slot])
@@ -335,7 +343,7 @@ class PySerialNetworkHost:
             self.send_packet(CMD_H_CONNECTED_STATUS, slot, status)
             return
 
-        # --- UDP ---
+        # UDP
         elif cmd == CMD_C_UDP_BEGIN:
             try:
                 port = (payload[0] << 8) | payload[1]
@@ -401,7 +409,7 @@ class PySerialNetworkHost:
                 self.udp_sockets[slot] = None
             success = True
 
-        # --- WEBSOCKET ---
+        # WEBSOCKET
         elif cmd == CMD_C_WS_CONNECT:
             try:
                 # [SSL][PortH][PortL][HLen][Host][PLen][Path]
@@ -434,7 +442,7 @@ class PySerialNetworkHost:
         elif cmd == CMD_C_WS_LOOP:
             success = True
 
-        # --- FINAL ACK ---
+        # FINAL ACK
         # Some commands don't need a Generic ACK because they have specific responses 
         # (POLL_RESPONSE, CONNECTED_STATUS, DATA_ACK logic).
         # We ACK everything else to satisfy Client "awaitAckNak".
@@ -461,7 +469,11 @@ class PySerialNetworkHost:
                                     recv_crc = struct.unpack('<H', decoded[-2:])[0]
                                     if recv_crc == calculate_crc16(data):
                                         self.process_command(data)
-                            except: pass
+                            except Exception as e:
+                                # FIX: Catch decoder errors (often caused by boot noise)
+                                # without crashing the script.
+                                print(f"Decoder Warning: {e}")
+                                pass
                 time.sleep(0.001)
             except KeyboardInterrupt: self.running = False
             except Exception as e: 

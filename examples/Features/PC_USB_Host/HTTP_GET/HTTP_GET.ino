@@ -1,6 +1,6 @@
 /**
  * ===============================================
- * PC USB Host HTTP Client Example
+ * PC USB Host HTTP Client Example (Revised)
  * ===============================================
  * Runs on: Any Arduino device (as Client).
  * Host: Requires the 'serial_bridge.py' script running on your PC.
@@ -13,8 +13,9 @@
  * 3. Close the Serial Monitor (The USB port is used for the bridge).
  * 4. Run 'python serial_bridge.py' on your computer.
  * 5. Watch the Built-in LED:
- * - 1 Short Flash:  Pong received (Bridge is active).
- * - 3 Fast Flashes: HTTP Request successful (Internet access working).
+ * - Fast Flashing (20x): Connected to Server (httpbin.org).
+ * - Short Blip (2x):     Data received from Server.
+ * - Slow Blink (5x):     Error (Ping failed or Connection failed).
  */
 
 // CRITICAL: Debugging MUST be disabled
@@ -41,19 +42,8 @@
 
 #include <SerialNetworkBridge.h>
 
-// Use the main USB Serial port
+// Use the main USB Serial port (Slot 0)
 SerialTCPClient client(Serial, 0);
-
-void setup()
-{
-  Serial.begin(115200);
-  while (!Serial)
-    ;
-#if defined(LED_BUILTIN)
-  pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, HIGH);
-#endif
-}
 
 void flashLED(int times, int delayMs)
 {
@@ -68,38 +58,70 @@ void flashLED(int times, int delayMs)
 #endif
 }
 
+void setup()
+{
+  Serial.begin(115200);
+  while (!Serial)
+    ;
+
+  // [CRITICAL FIX] Flush bootloader noise so the PC Python script 
+  // doesn't get confused by random bytes on startup.
+  Serial.write(0x00); 
+  delay(500);
+
+#if defined(LED_BUILTIN)
+  pinMode(LED_BUILTIN, OUTPUT);
+  // Start OFF (Assuming Active LOW for most builtin LEDs)
+  digitalWrite(LED_BUILTIN, HIGH);
+#endif
+}
+
 void loop()
 {
   // 1. Ping the PC Host first to ensure bridge is running
   if (client.pingHost(500))
   {
-
-    // Step 1: Pong Received (Flash LED Once)
-    flashLED(20, 50);
-
-    // Step 2: Send HTTP Request
+    // 2. Connect to the server
+    // Matches WS_EVENT_CONNECTED style
     if (client.connect("httpbin.org", 443))
     {
+      // Step 1: Connection Established (Flash LED Fast)
+      flashLED(20, 50);
 
+      // Send HTTP GET request
       client.println("GET /get HTTP/1.1");
       client.println("Host: httpbin.org");
       client.println("Connection: close");
       client.println();
 
-      // Read and consume the response
+      // Wait for response
       while (client.connected() || client.available())
       {
         if (client.available())
         {
-          client.read();
+          // Step 2: Data Received (Short Double Blip)
+          // We blink once when we start receiving data to indicate "Message Received"
+          flashLED(2, 50);
+          
+          // Consume all available data (we can't print to Serial because it's the bridge)
+          while(client.available()) {
+             client.read();
+          }
         }
+        delay(1);
       }
       client.stop();
-
-      // Step 3: HTTP Success (Flash LED Twice quickly)
-      // Total visual sequence: Flash (Pong)... Flash-Flash (HTTP)
-      flashLED(60, 50);
     }
+    else
+    {
+      // Error: Connection Failed (Slow Blink)
+      flashLED(5, 500);
+    }
+  }
+  else
+  {
+      // Error: Ping Failed (Slow Blink)
+      flashLED(5, 500);
   }
 
   // Wait 5 seconds before repeating

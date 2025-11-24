@@ -1,13 +1,13 @@
 /**
  * ===============================================
- * HTTP Streaming (Server-Sent Events) Client Example
- * With Chunked Transfer Encoding Support
+ * HTTP Streaming (SSE) Client Example
  * ===============================================
- * Runs on: Any Arduino device.
- * Host: Requires the "Basics/Host" sketch running on the host.
- * Server: Runs examples/Basics/HTTP_Streaming/Server/sse.php
+ * Runs on: Any Arduino device (Client) with a second Serial port.
+ * Host: Requires a Arduino device host (ESP32/ESP8266) connected via Serial port.
+ * Server: Simulate your PC as server which requires 'sse_server.py' running on your PC.
+ * Your PC and the Device Host must be on the SAME network.
  *
- * Purpose: Demonstrates reading a chunked HTTP stream.
+ * Purpose: Demonstrates reading a chunked HTTP stream from the Python server.
  */
 
 // Define this BEFORE including SerialTCPClient.h to enable chunk decoding methods
@@ -17,14 +17,19 @@
 #include <SerialNetworkBridge.h>
 
 // Serial TCP Client Config
-const int CLIENT_SLOT = 0;       // Corresponding to Network client or SSL client slot 0 on the host
-const long SERIAL_BAUD = 115200; // Corresponding to the baud rate used in the host Serial
+const int CLIENT_SLOT = 0;       // Slot 0 on the Device Host
+const long SERIAL_BAUD = 115200; // Baud rate for Serial2 (Bridge)
 
+// Use Serial2 to talk to the ESP32 Host
 SerialTCPClient client(Serial2, CLIENT_SLOT);
 
-String host = "your_server_ip_or_host";
-String uri = "/sse.php"; // if sse.php is located in the root directory.
-uint16_t port = 443;
+// SERVER CONFIGURATION
+// Your PC's Local IP Address (e.g., "192.168.1.50").
+// On Windows, run 'ipconfig' in cmd to find this.
+// On Mac/Linux, run 'ifconfig' or 'ip a'.
+String host = "192.168.1.XXX"; // <--- UPDATE THIS WITH YOUR PC's IP
+String uri = "/stream";        // Endpoint defined in sse_server.py
+uint16_t port = 5000;          // Default Flask port
 
 // State machine for chunked decoding
 enum ChunkState
@@ -42,11 +47,17 @@ long bytesReadInChunk = 0;
 bool connectServer()
 {
   Serial.println();
-  Serial.print("Connecting to server...");
+  Serial.print("Connecting to server (");
+  Serial.print(host);
+  Serial.print(":");
+  Serial.print(port);
+  Serial.println(")...");
 
+  // Connect to the server (Plain HTTP)
+  // The Device Host (ESP32) handles the actual WiFi connection.
   if (client.connect(host.c_str(), port))
   {
-    Serial.println(" ok");
+    Serial.println("Connected!");
 
     String header = "GET ";
     header += uri;
@@ -69,7 +80,7 @@ bool connectServer()
   else
   {
     client.stop();
-    Serial.println(" failed\n");
+    Serial.println("Connection failed.");
     delay(2000);
   }
 
@@ -78,31 +89,35 @@ bool connectServer()
 
 void setup()
 {
+  // Debug Serial (USB to PC)
   Serial.begin(115200);
   delay(1000);
 
+  // Bridge Serial (To ESP32 Host)
   Serial2.begin(SERIAL_BAUD);
-  client.setLocalDebugLevel(1); // Enable debug prints
+
+  client.setLocalDebugLevel(1); // Enable library debug prints
 
   Serial.print("Pinging host... ");
   if (!client.pingHost())
   {
     Serial.println("failed");
-    Serial.println("Please check wiring/Serial configuration and ensure the host is running.");
+    Serial.println("Check wiring on Serial2 and ensure ESP32 Host is running.");
     while (1)
       delay(100);
   }
   Serial.println("success");
 
-  Serial.println("Client is ready. Will attempt connection in loop().");
-
+  Serial.println("Client is ready. Attempting connection...");
   connectServer();
 }
 
 void loop()
 {
+  // Auto-reconnect if disconnected
   if (!client.connected())
   {
+    Serial.println("Disconnected. Reconnecting...");
     if (!connectServer())
       return;
   }
@@ -114,19 +129,16 @@ void loop()
     case READ_HEADERS:
     {
       // Read headers until empty line
-      // Note: readStringUntil is blocking but efficient enough here
       String line = client.readStringUntil('\n');
 
-      // Simple check for end of headers (CRLF)
-      // readStringUntil strips the delimiter (\n), so we check for \r
+      // Check for end of headers (Empty line is just \r)
       if (line == "\r")
       {
-        Serial.println("--- Headers End ---");
+        Serial.println("--- Headers End. Stream Starting");
         state = READ_CHUNK_SIZE;
       }
       else
       {
-        // Optional: You could check for "Transfer-Encoding: chunked" here
         Serial.print("Header: ");
         Serial.println(line);
       }
@@ -135,7 +147,7 @@ void loop()
 
     case READ_CHUNK_SIZE:
     {
-      // Use the library's built-in helper!
+      // Parse the hex chunk size sent by Flask/Server
       long size = client.readChunkSize();
 
       if (size >= 0)
@@ -150,14 +162,12 @@ void loop()
         {
           Serial.println("End of stream (0 chunk)");
           client.stop();
-          // Or handle trailers if needed
         }
         else
         {
           state = READ_CHUNK_DATA;
         }
       }
-      // If -1 (error/timeout), loop will retry
       break;
     }
 
@@ -165,7 +175,6 @@ void loop()
     {
       if (chunkSize > 0)
       {
-        // Read up to available bytes, but not more than remaining chunk
         long available = client.available();
         long remaining = chunkSize - bytesReadInChunk;
         int bytesToRead = (int)min(available, remaining);
@@ -175,7 +184,7 @@ void loop()
           int b = client.read();
           if (b != -1)
           {
-            Serial.write((char)b);
+            Serial.write((char)b); // Print stream data to Monitor
             bytesReadInChunk++;
             bytesToRead--;
           }
@@ -195,8 +204,7 @@ void loop()
 
     case READ_CHUNK_CRLF:
     {
-      // After chunk data, there is a CRLF. We need to consume it.
-      // We might need to wait for 2 bytes.
+      // Consume the CRLF that follows every chunk
       if (client.available() >= 2)
       {
         client.read();           // \r

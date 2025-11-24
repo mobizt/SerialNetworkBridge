@@ -17,7 +17,7 @@ const int CLIENT_SLOT = 0;       // Coresponding to Network client or SSL client
 const long SERIAL_BAUD = 115200; // Coresponding to the baud rate used in the host Serial
 
 // MQTT Config
-const char broker[] = "test.mosquitto.org";
+const char broker[] = "broker.hivemq.com";
 const int port = 1883; // Use 1883 for non-SSL and make sure the host slot 0 client can handle it
 const char topic[] = "arduino/serialtcp-test";
 
