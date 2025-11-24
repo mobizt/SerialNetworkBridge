@@ -24,21 +24,20 @@
 
 // Define LED_BUILTIN if not defined by the board package
 #ifndef LED_BUILTIN
-  #if defined(ESP8266)
-    // Most ESP8266 modules (NodeMCU, Wemos) use GPIO 2
-    #define LED_BUILTIN 2
-  #elif defined(ESP32)
-    // Many ESP32 dev boards use GPIO 2
-    #define LED_BUILTIN 2
-  #elif defined(STM32F1xx)
-    // "Blue Pill" STM32 usually uses PC13
-    #define LED_BUILTIN PC13
-  #else
-    // Default for Arduino Uno, Mega, Nano, Leonardo, etc.
-    #define LED_BUILTIN 13
-  #endif
+#if defined(ESP8266)
+// Most ESP8266 modules (NodeMCU, Wemos) use GPIO 2
+#define LED_BUILTIN 2
+#elif defined(ESP32)
+// Many ESP32 dev boards use GPIO 2
+#define LED_BUILTIN 2
+#elif defined(STM32F1xx)
+// "Blue Pill" STM32 usually uses PC13
+#define LED_BUILTIN PC13
+#else
+// Default for Arduino Uno, Mega, Nano, Leonardo, etc.
+#define LED_BUILTIN 13
 #endif
-
+#endif
 
 #include <SerialNetworkBridge.h>
 
@@ -47,62 +46,62 @@ SerialTCPClient client(Serial, 0);
 
 void setup()
 {
-    Serial.begin(115200);
-    while (!Serial)
-        ;
+  Serial.begin(115200);
+  while (!Serial)
+    ;
 #if defined(LED_BUILTIN)
-    pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, HIGH);
+#endif
+}
+
+void flashLED(int times, int delayMs)
+{
+#if defined(LED_BUILTIN)
+  for (int i = 0; i < times; i++)
+  {
     digitalWrite(LED_BUILTIN, LOW);
+    delay(delayMs);
+    digitalWrite(LED_BUILTIN, HIGH);
+    delay(delayMs);
+  }
 #endif
 }
 
 void loop()
 {
-    // 1. Ping the PC Host first to ensure bridge is running
-    if (client.pingHost(500))
+  // 1. Ping the PC Host first to ensure bridge is running
+  if (client.pingHost(500))
+  {
+
+    // Step 1: Pong Received (Flash LED Once)
+    flashLED(20, 50);
+
+    // Step 2: Send HTTP Request
+    if (client.connect("httpbin.org", 443))
     {
 
-// Step 1: Pong Received (Flash LED Once)
-#if defined(LED_BUILTIN)
-        digitalWrite(LED_BUILTIN, HIGH);
-        delay(100);
-        digitalWrite(LED_BUILTIN, LOW);
-        delay(100);
-#endif
+      client.println("GET /get HTTP/1.1");
+      client.println("Host: httpbin.org");
+      client.println("Connection: close");
+      client.println();
 
-        // Step 2: Send HTTP Request
-        if (client.connect("httpbin.org", 80))
+      // Read and consume the response
+      while (client.connected() || client.available())
+      {
+        if (client.available())
         {
-
-            client.println("GET /get HTTP/1.1");
-            client.println("Host: httpbin.org");
-            client.println("Connection: close");
-            client.println();
-
-            // Read and consume the response
-            while (client.connected() || client.available())
-            {
-                if (client.available())
-                {
-                    client.read();
-                }
-            }
-            client.stop();
-
-// Step 3: HTTP Success (Flash LED Twice quickly)
-// Total visual sequence: Flash (Pong)... Flash-Flash (HTTP)
-#if defined(LED_BUILTIN)
-            digitalWrite(LED_BUILTIN, HIGH);
-            delay(100);
-            digitalWrite(LED_BUILTIN, LOW);
-            delay(100);
-            digitalWrite(LED_BUILTIN, HIGH);
-            delay(100);
-            digitalWrite(LED_BUILTIN, LOW);
-#endif
+          client.read();
         }
-    }
+      }
+      client.stop();
 
-    // Wait 5 seconds before repeating
-    delay(5000);
+      // Step 3: HTTP Success (Flash LED Twice quickly)
+      // Total visual sequence: Flash (Pong)... Flash-Flash (HTTP)
+      flashLED(60, 50);
+    }
+  }
+
+  // Wait 5 seconds before repeating
+  delay(5000);
 }
