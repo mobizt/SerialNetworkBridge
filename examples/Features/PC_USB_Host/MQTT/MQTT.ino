@@ -5,7 +5,7 @@
  * Runs on: Any Arduino device (as Client).
  * Host: Requires the 'serial_bridge.py' script running on your PC.
  * Purpose: Connects to broker.hivemq.com on Port 8883 (SSL) via PC Bridge.
- * * * INSTRUCTIONS:
+ * INSTRUCTIONS:
  * 1. CRITICAL: Ensure '#define ENABLE_SERIALTCP_DEBUG' is commented out/disabled.
  * 2. Upload this sketch.
  * 3. Close Serial Monitor.

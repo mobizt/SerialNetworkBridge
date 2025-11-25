@@ -10,6 +10,11 @@
 
 #include <WiFi.h>
 #include <WiFiClient.h>
+
+#define ENABLE_DEBUG        // To enable ESP_SSLClient debugging
+#define ENABLE_ERROR_STRING // To show ESP_SSLClient error details
+#define DEBUG_PORT Serial   // To define the serial port for ESP_SSLClient debug printing
+
 // https://github.com/mobizt/ESP_SSLClient
 #include <ESP_SSLClient.h>
 
@@ -31,15 +36,15 @@ ESP_SSLClient ssl_client; // (STARTTLS capable SSL client)
 bool handle_start_tls(int slot)
 {
     Serial.println("[Host] STARTTLS Callback Triggered for slot " + String(slot));
-    Serial.println("  > Calling connectSSL()...");
+    Serial.println("> Calling connectSSL()...");
     if (ssl_client.connectSSL())
     {
-        Serial.println("  > SUCCESS: connectSSL() completed.");
+        Serial.println("> SUCCESS: connectSSL() completed.");
         return true;
     }
     else
     {
-        Serial.println("  > ERROR: connectSSL() failed.");
+        Serial.println("> ERROR: connectSSL() failed.");
         return false;
     }
 }
@@ -67,6 +72,8 @@ void setup()
 
     host.setTCPClient(&ssl_client, 0 /* slot */); // Coresponding to slot 0 on host device
 
+    ssl_client.setInsecure(); // Skip certificate validation for testing
+
     // Register the STARTTLS Callback
     // We only register it for the secure-capable slot
     host.setStartTLSCallback(0, handle_start_tls);
@@ -76,7 +83,7 @@ void setup()
     host.notifyBoot();
 
     Serial.println("Host is ready.");
-    Serial.println("  > Slot 0: Plain/STARTTLS Capable");
+    Serial.println("> Slot 0: Plain/STARTTLS Capable");
 }
 
 void loop()

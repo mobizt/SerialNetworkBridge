@@ -5,13 +5,17 @@ import threading
 import struct
 import queue
 import ssl
+import sys
+import os
+import platform
+import subprocess
 from cobs import cobs
 import websocket  # pip install websocket-client
 
 # ==========================================
 #  CONFIGURATION
 # ==========================================
-SERIAL_PORT = 'COM3'   # Update this to match your port
+SERIAL_PORT = 'COM16'   # Update this to match your port
 BAUD_RATE = 115200
 
 # ==========================================
@@ -19,6 +23,10 @@ BAUD_RATE = 115200
 # ==========================================
 # Global
 GLOBAL_SLOT_ID         = 0xFF
+CMD_C_SET_WIFI         = 0x01
+CMD_C_CONNECT_NET      = 0x02
+CMD_C_DISCONNECT_NET   = 0x03
+CMD_C_IS_NET_CONNECTED = 0x04
 CMD_C_SET_DEBUG        = 0x05
 CMD_C_PING_HOST        = 0x06
 CMD_C_REBOOT_HOST      = 0x07
@@ -89,14 +97,26 @@ def calculate_crc16(data: bytes) -> int:
 # ==========================================
 class PySerialNetworkHost:
     def __init__(self, port, baud_rate):
-        self.ser = serial.Serial(port, baud_rate, timeout=0.01)
+        # Retry logic for serial port
+        self.ser = None
+        for i in range(5):
+            try:
+                self.ser = serial.Serial(port, baud_rate, timeout=0.01)
+                break
+            except Exception as e:
+                print(f"[INIT] Failed to open {port} (Attempt {i+1}/5): {e}")
+                time.sleep(1)
+        
+        if not self.ser:
+            print(f"[CRITICAL] Could not open serial port {port}. Exiting.")
+            sys.exit(1)
+
         self.lock = threading.Lock()
         self.running = True
         
         # TCP State
         self.tcp_slots = [None] * MAX_SLOTS
         self.tcp_ca_certs = [None] * MAX_SLOTS 
-        # Events for Flow Control (Stop-and-Wait)
         self.tcp_ack_events = [threading.Event() for _ in range(MAX_SLOTS)]
         
         # UDP State
@@ -110,9 +130,11 @@ class PySerialNetworkHost:
         self.session_id = int(time.time() * 1000) & 0xFFFF 
         if self.session_id == 0: self.session_id = 1
         
+        # Store WiFi credentials for connect/disconnect usage
+        self.wifi_ssid = ""
+        self.wifi_pass = ""
+
         print(f"Bridge started on {port} @ {baud_rate}. Session: {self.session_id:04X}")
-        # Enable trace to see internal websocket errors if needed
-        # websocket.enableTrace(True) 
         self.notify_boot()
 
     def notify_boot(self):
@@ -127,35 +149,22 @@ class PySerialNetworkHost:
         
         with self.lock:
             self.ser.write(encoded)
-            # self.ser.flush() 
 
-    #-----------------------------------------------------------------------
+    # --------------------------------------------------------------------------
     # TCP Logic
-    #-----------------------------------------------------------------------
+    # --------------------------------------------------------------------------
     def tcp_rx_thread(self, slot_id, sock):
-        """
-        Reads from internet, sends to Arduino, and WAITS for Arduino ACK.
-        This mimics the 'WAIT_FOR_ACK' state in SerialNetworkHost.h
-        """
         while self.tcp_slots[slot_id] == sock and self.running:
             try:
-                # Read chunks suited for Arduino buffer
                 data = sock.recv(64) 
                 if not data: break
                 
-                # 1. Clear previous ACK
                 self.tcp_ack_events[slot_id].clear()
-                
-                # 2. Send Data
                 self.send_packet(CMD_H_DATA_PAYLOAD, slot_id, data)
-                
-                # 3. Wait for ACK (Flow Control)
-                # Arduino Client sends CMD_C_DATA_ACK after processing
                 ack_received = self.tcp_ack_events[slot_id].wait(timeout=2.0)
                 
                 if not ack_received:
                     print(f"Slot {slot_id} Timeout waiting for ACK. Dropping packet.")
-                    # In a full retry system, we would resend here.
                     
             except socket.timeout: continue
             except OSError: break
@@ -185,20 +194,22 @@ class PySerialNetworkHost:
             context.verify_mode = ssl.CERT_NONE
         return context.wrap_socket(sock, server_hostname=hostname)
 
-    #-----------------------------------------------------------------------
+    # --------------------------------------------------------------------------
     # UDP Logic
-    #-----------------------------------------------------------------------
+    # --------------------------------------------------------------------------
     def udp_rx_thread(self, slot_id, sock):
         while self.udp_sockets[slot_id] == sock and self.running:
             try:
-                data, addr = sock.recvfrom(512)
+                data = sock.recv(64) 
+                if not data: break
+                
                 self.udp_rx_queues[slot_id].put((data, addr[0], addr[1]))
             except socket.timeout: continue
             except: break
 
-    #-----------------------------------------------------------------------
+    # --------------------------------------------------------------------------
     # WebSocket Logic
-    #-----------------------------------------------------------------------
+    # --------------------------------------------------------------------------
     def start_ws(self, slot, host, port, path, use_ssl):
         scheme = "wss" if use_ssl else "ws"
         url = f"{scheme}://{host}:{port}{path}"
@@ -230,45 +241,218 @@ class PySerialNetworkHost:
         
         self.ws_clients[slot] = ws
         
-        # FIX: Added sslopt to ignore cert verification on PC
         run_kwargs = {}
         if use_ssl:
-             run_kwargs = {"sslopt": {"cert_reqs": ssl.CERT_NONE}}
+            run_kwargs = {"sslopt": {"cert_reqs": ssl.CERT_NONE}}
 
         wst = threading.Thread(target=ws.run_forever, kwargs=run_kwargs)
         wst.daemon = True
         wst.start()
 
-    #-----------------------------------------------------------------------
+    # --------------------------------------------------------------------------
+    # System Command Utilities
+    # --------------------------------------------------------------------------
+    def check_internet(self):
+        try:
+            socket.create_connection(("8.8.8.8", 53), timeout=3)
+            return True
+        except OSError:
+            return False
+
+    def system_set_wifi(self, ssid, password):
+        sys_platform = platform.system()
+        print(f"[SYSTEM] Configuring WiFi for {sys_platform}...")
+        
+        if sys_platform == "Windows":
+            # Correct XML format for Windows netsh
+            xml_template = f"""<?xml version="1.0"?>
+<WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
+    <name>{ssid}</name>
+    <SSIDConfig>
+        <SSID>
+            <name>{ssid}</name>
+        </SSID>
+    </SSIDConfig>
+    <connectionType>ESS</connectionType>
+    <connectionMode>auto</connectionMode>
+    <MSM>
+        <security>
+            <authEncryption>
+                <authentication>WPA2PSK</authentication>
+                <encryption>AES</encryption>
+                <useOneX>false</useOneX>
+            </authEncryption>
+            <sharedKey>
+                <keyType>passPhrase</keyType>
+                <protected>false</protected>
+                <keyMaterial>{password}</keyMaterial>
+            </sharedKey>
+        </security>
+    </MSM>
+</WLANProfile>"""
+            try:
+                # Write temporary XML profile
+                with open("wifi.xml", "w") as f:
+                    f.write(xml_template)
+                
+                # Execute commands
+                os.system('netsh wlan add profile filename="wifi.xml"')
+                os.system(f'netsh wlan connect name="{ssid}"')
+                
+                # Cleanup
+                if os.path.exists("wifi.xml"):
+                    os.remove("wifi.xml")
+                return True
+            except Exception as e:
+                print(f"[ERROR] Windows WiFi Config Failed: {e}")
+                return False
+
+        elif sys_platform == "Linux":
+            # Using nmcli (Network Manager CLI)
+            try:
+                # Disconnect current first to ensure clean switch
+                os.system("nmcli dev disconnect wlan0")
+                if password:
+                    ret = os.system(f"nmcli dev wifi connect '{ssid}' password '{password}'")
+                else:
+                    ret = os.system(f"nmcli dev wifi connect '{ssid}'")
+                return ret == 0
+            except:
+                return False
+
+        elif sys_platform == "Darwin": # macOS
+            try:
+                os.system("networksetup -setairportpower en0 off")
+                time.sleep(1)
+                os.system("networksetup -setairportpower en0 on")
+                if password:
+                    ret = os.system(f"networksetup -setairportnetwork en0 '{ssid}' '{password}'")
+                else:
+                    ret = os.system(f"networksetup -setairportnetwork en0 '{ssid}'")
+                return ret == 0
+            except:
+                return False
+        
+        else:
+            print(f"[SYSTEM] Unsupported OS: {sys_platform}")
+            return False
+
+    def system_disconnect_wifi(self):
+        sys_platform = platform.system()
+        print(f"[SYSTEM] Disconnecting WiFi for {sys_platform}...")
+        
+        if sys_platform == "Windows":
+            os.system("netsh wlan disconnect")
+        elif sys_platform == "Linux":
+            os.system("nmcli dev disconnect wlan0")
+        elif sys_platform == "Darwin": # macOS
+            os.system("networksetup -setairportpower en0 off")
+        else:
+            print("Unsupported OS")
+        return True
+
+    def system_reboot(self):
+        print("[SYSTEM] Rebooting OS...")
+        sys_platform = platform.system()
+        if sys_platform == "Windows":
+            os.system("shutdown /r /t 0")
+        else:
+            os.system("sudo reboot")
+
+    # --------------------------------------------------------------------------
     # Command Processor
-    #-----------------------------------------------------------------------
+    # --------------------------------------------------------------------------
     def process_command(self, packet):
         if len(packet) < 2: return
         cmd, slot = packet[0], packet[1]
         payload = packet[2:]
         success = False
 
-        # GLOBAL
+        # --- GLOBAL COMMANDS ---
         if cmd == CMD_C_PING_HOST:
             self.send_packet(CMD_H_PING_RESPONSE, GLOBAL_SLOT_ID)
             return
             
         elif cmd == CMD_C_SET_DEBUG:
-            print(f"Debug Level Set: {payload[0]}")
+            print(f"[GLOBAL] Debug Level Set: {payload[0]}")
             self.send_packet(CMD_H_ACK, GLOBAL_SLOT_ID)
             return
 
-        # TCP
+        elif cmd == CMD_C_REBOOT_HOST:
+            print("\n" + "="*40)
+            print("!!! SYSTEM REBOOT REQUESTED BY CLIENT !!!")
+            print("Host Computer will reboot in 10 seconds...")
+            print("="*40 + "\n")
+            self.send_packet(CMD_H_ACK, GLOBAL_SLOT_ID)
+            
+            def perform_reboot():
+                time.sleep(10)
+                if self.ser: self.ser.close()
+                self.system_reboot()
+
+            threading.Thread(target=perform_reboot, daemon=True).start()
+            return
+
+        elif cmd == CMD_C_SET_WIFI:
+            try:
+                sl = payload[0]
+                ssid = payload[1:1+sl].decode('utf-8')
+                pl = payload[1+sl]
+                password = payload[2+sl:2+sl+pl].decode('utf-8')
+                
+                print(f"[GLOBAL] Set WiFi Request: {ssid}")
+                
+                # Store for connection
+                self.wifi_ssid = ssid
+                self.wifi_pass = password
+                
+                success = True
+            except: 
+                print("[GLOBAL] Failed to parse Set WiFi command")
+                success = False
+            self.send_packet(CMD_H_ACK if success else CMD_H_NAK, GLOBAL_SLOT_ID)
+            return
+
+        elif cmd == CMD_C_CONNECT_NET:
+            print(f"[GLOBAL] Connecting to WiFi: {self.wifi_ssid}...")
+            if self.wifi_ssid:
+                # Trigger the actual system connection in a thread
+                # This avoids blocking the serial read loop
+                threading.Thread(target=self.system_set_wifi, args=(self.wifi_ssid, self.wifi_pass), daemon=True).start()
+                success = True
+            else:
+                print("[GLOBAL] No SSID configured.")
+                success = False
+            self.send_packet(CMD_H_ACK if success else CMD_H_NAK, GLOBAL_SLOT_ID)
+            return
+
+        elif cmd == CMD_C_DISCONNECT_NET:
+            print("[GLOBAL] Disconnecting Network...")
+            threading.Thread(target=self.system_disconnect_wifi, daemon=True).start()
+            self.send_packet(CMD_H_ACK, GLOBAL_SLOT_ID)
+            return
+
+        elif cmd == CMD_C_IS_NET_CONNECTED:
+            is_connected = self.check_internet()
+            print(f"[GLOBAL] Network Check: {'Online' if is_connected else 'Offline'}")
+            self.send_packet(CMD_H_ACK if is_connected else CMD_H_NAK, GLOBAL_SLOT_ID)
+            return
+
+        # --- TCP ---
         if cmd == CMD_C_CONNECT_HOST:
             try:
+                if self.tcp_slots[slot]:
+                    print(f"[TCP] Slot {slot} busy. Closing previous connection...")
+                    self.close_tcp(slot)
+
                 use_ssl = bool(payload[0])
                 port = (payload[1] << 8) | payload[2]
                 hlen = payload[3]
                 host = payload[4:4+hlen].decode('utf-8')
                 
-                print(f"TCP Connect ({'SSL' if use_ssl else 'Plain'}) -> {host}:{port}")
+                print(f"[TCP] Connect ({'SSL' if use_ssl else 'Plain'}) -> {host}:{port}")
                 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                s.settimeout(10)
+                s.settimeout(10.0) 
                 
                 if use_ssl:
                     s = self.wrap_socket_ssl(s, host, self.tcp_ca_certs[slot])
@@ -318,7 +502,6 @@ class PySerialNetworkHost:
             except: pass
 
         elif cmd == CMD_C_POLL_DATA:
-            # Check Session ID for Reset
             if len(payload) >= 2:
                 client_sid = (payload[0] << 8) | payload[1]
                 if client_sid != 0 and client_sid != self.session_id:
@@ -326,24 +509,21 @@ class PySerialNetworkHost:
                      self.notify_boot()
                      return
 
-            # Send Poll Response
             is_conn = 1 if self.tcp_slots[slot] else 0
-            # Payload: [Conn][LenH][LenL]
             resp = bytes([is_conn, 0, 0]) 
             self.send_packet(CMD_H_POLL_RESPONSE, slot, resp)
             return
 
         elif cmd == CMD_C_DATA_ACK:
-            # Client confirms receipt of data. Unblock RX thread.
             self.tcp_ack_events[slot].set()
-            return # No ACK needed for an ACK
+            return 
 
         elif cmd == CMD_C_IS_CONNECTED:
             status = b'\x01' if self.tcp_slots[slot] else b'\x00'
             self.send_packet(CMD_H_CONNECTED_STATUS, slot, status)
             return
 
-        # UDP
+        # --- UDP ---
         elif cmd == CMD_C_UDP_BEGIN:
             try:
                 port = (payload[0] << 8) | payload[1]
@@ -360,7 +540,6 @@ class PySerialNetworkHost:
             except Exception as e: print(f"UDP Begin: {e}")
 
         elif cmd == CMD_C_UDP_BEGIN_PACKET:
-            # Payload: [PortH][PortL][Type][...Addr...]
             try:
                 port = (payload[0] << 8) | payload[1]
                 ptype = payload[2]
@@ -394,7 +573,6 @@ class PySerialNetworkHost:
                 data, ip_str, port = self.udp_rx_queues[slot].get_nowait()
                 ip_parts = [int(x) for x in ip_str.split('.')]
                 size = len(data)
-                # INFO: [IP0..3][PortH][PortL][SizeH][SizeL]
                 info = bytes(ip_parts) + struct.pack('>HH', port, size)
                 
                 self.send_packet(CMD_H_UDP_PACKET_INFO, slot, info)
@@ -409,10 +587,9 @@ class PySerialNetworkHost:
                 self.udp_sockets[slot] = None
             success = True
 
-        # WEBSOCKET
+        # --- WEBSOCKET ---
         elif cmd == CMD_C_WS_CONNECT:
             try:
-                # [SSL][PortH][PortL][HLen][Host][PLen][Path]
                 use_ssl = bool(payload[0])
                 port = (payload[1] << 8) | payload[2]
                 hl = payload[3]
@@ -442,10 +619,6 @@ class PySerialNetworkHost:
         elif cmd == CMD_C_WS_LOOP:
             success = True
 
-        # FINAL ACK
-        # Some commands don't need a Generic ACK because they have specific responses 
-        # (POLL_RESPONSE, CONNECTED_STATUS, DATA_ACK logic).
-        # We ACK everything else to satisfy Client "awaitAckNak".
         if cmd not in [CMD_C_POLL_DATA, CMD_C_IS_CONNECTED, CMD_C_DATA_ACK]:
              self.send_packet(CMD_H_ACK if success else CMD_H_NAK, slot)
 
@@ -470,8 +643,6 @@ class PySerialNetworkHost:
                                     if recv_crc == calculate_crc16(data):
                                         self.process_command(data)
                             except Exception as e:
-                                # FIX: Catch decoder errors (often caused by boot noise)
-                                # without crashing the script.
                                 print(f"Decoder Warning: {e}")
                                 pass
                 time.sleep(0.001)
@@ -479,7 +650,7 @@ class PySerialNetworkHost:
             except Exception as e: 
                 print(f"Main Loop Error: {e}")
                 self.running = False
-        self.ser.close()
+        if self.ser: self.ser.close()
 
 if __name__ == "__main__":
     host = PySerialNetworkHost(SERIAL_PORT, BAUD_RATE)

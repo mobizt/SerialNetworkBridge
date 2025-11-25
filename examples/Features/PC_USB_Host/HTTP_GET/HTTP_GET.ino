@@ -7,7 +7,7 @@
  * Purpose: Demonstrates how to configure your device to connect to
  * the 'serial_bridge.py' script running on your computer via the USB cable.
  * It pings the bridge and sends an HTTP GET request to httpbin.org.
- * * INSTRUCTIONS:
+ * INSTRUCTIONS:
  * 1. CRITICAL: Ensure '#define ENABLE_SERIALTCP_DEBUG' is commented out/disabled.
  * 2. Upload this sketch to your Arduino.
  * 3. Close the Serial Monitor (The USB port is used for the bridge).

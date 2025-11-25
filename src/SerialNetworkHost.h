@@ -262,31 +262,33 @@ private:
             case CMD_C_DISCONNECT_NET:
                 global_success = false; // Default to false
 
-                // WiFi Disconnect
-                #if defined(HOST_HAS_WIFI)
-                    if (WiFi.status() != WL_NO_SHIELD) {
-                        WiFi.disconnect(); 
-                        global_success = true;
-                    }
-                #endif
+// WiFi Disconnect
+#if defined(HOST_HAS_WIFI)
+                if (WiFi.status() != WL_NO_SHIELD)
+                {
+                    WiFi.disconnect();
+                    global_success = true;
+                }
+#endif
 
-                // Ethernet Disconnect (No-Op)
-                #if defined(HOST_HAS_ETHERNET)
-                    // Ethernet cannot be "disconnected" via software. 
-                    // We check if hardware is present, then return 'true' to signal 
-                    // the command was acknowledged, even though link remains up.
-                    
-                    #if defined(Ethernet_h)
-                        if (Ethernet.hardwareStatus() != EthernetNoHardware) {
-                            global_success = true; 
-                        }
-                    #endif
+// Ethernet Disconnect (No-Op)
+#if defined(HOST_HAS_ETHERNET)
+                // Ethernet cannot be "disconnected" via software.
+                // We check if hardware is present, then return 'true' to signal
+                // the command was acknowledged, even though link remains up.
 
-                    #if defined(ETH_H)
-                        // ESP32 Ethernet is internal/PHY based
-                        global_success = true; 
-                    #endif
-                #endif
+#if defined(Ethernet_h)
+                if (Ethernet.hardwareStatus() != EthernetNoHardware)
+                {
+                    global_success = true;
+                }
+#endif
+
+#if defined(ETH_H)
+                // ESP32 Ethernet is internal/PHY based
+                global_success = true;
+#endif
+#endif
                 break;
             }
             sendPacketInternal(global_success ? CMD_H_ACK : CMD_H_NAK, GLOBAL_SLOT_ID, nullptr, 0);
@@ -537,6 +539,14 @@ private:
             char host_name[host_len + 1];
             memcpy(host_name, &payload[4], host_len);
             host_name[host_len] = '\0';
+
+            // Stop existing connection first
+            if (client && client->connected())
+            {
+                client->stop();
+                // Small delay to ensure stack cleanup might be needed depending on platform
+                // delay(10);
+            }
 
             if (_pre_connect_callback && _ca_cert_filenames[slot][0] != '\0')
             {
