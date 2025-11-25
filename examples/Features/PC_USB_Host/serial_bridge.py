@@ -15,7 +15,7 @@ import websocket  # pip install websocket-client
 # ==========================================
 #  CONFIGURATION
 # ==========================================
-SERIAL_PORT = 'COM16'   # Update this to match your port
+SERIAL_PORT = 'COM3'   # Update this to match your port
 BAUD_RATE = 115200
 
 # ==========================================
@@ -200,9 +200,7 @@ class PySerialNetworkHost:
     def udp_rx_thread(self, slot_id, sock):
         while self.udp_sockets[slot_id] == sock and self.running:
             try:
-                data = sock.recv(64) 
-                if not data: break
-                
+                data, addr = sock.recvfrom(512)
                 self.udp_rx_queues[slot_id].put((data, addr[0], addr[1]))
             except socket.timeout: continue
             except: break
@@ -250,7 +248,7 @@ class PySerialNetworkHost:
         wst.start()
 
     # --------------------------------------------------------------------------
-    # System Command Utilities
+    # System Command Utilities (Integrated from wifi_management.py)
     # --------------------------------------------------------------------------
     def check_internet(self):
         try:
@@ -259,47 +257,64 @@ class PySerialNetworkHost:
         except OSError:
             return False
 
+    def is_raspberry_pi(self):
+        """Detect if running on Raspberry Pi hardware."""
+        if platform.system() == "Linux":
+            try:
+                with open("/proc/cpuinfo", "r") as f:
+                    cpuinfo = f.read().lower()
+                    if "raspberry pi" in cpuinfo or "bcm" in cpuinfo:
+                        return True
+            except Exception:
+                pass
+        return False
+
+    def get_wifi_interface_linux(self):
+        """Auto-detect WiFi interface on Linux using nmcli, fallback to wlan0."""
+        try:
+            result = subprocess.check_output("nmcli device status", shell=True).decode()
+            for line in result.splitlines():
+                if "wifi" in line.lower():
+                    return line.split()[0]  # first column is interface name
+        except Exception:
+            pass
+        return "wlan0"
+
+    def get_wifi_interface_mac(self):
+        """Auto-detect WiFi interface on macOS using networksetup, fallback to en0."""
+        try:
+            result = subprocess.check_output("networksetup -listallhardwareports", shell=True).decode()
+            for block in result.split("\n\n"):
+                if "Wi-Fi" in block:
+                    for line in block.splitlines():
+                        if line.startswith("Device:"):
+                            return line.split(":")[1].strip()
+        except Exception:
+            pass
+        return "en0"
+
     def system_set_wifi(self, ssid, password):
         sys_platform = platform.system()
         print(f"[SYSTEM] Configuring WiFi for {sys_platform}...")
         
         if sys_platform == "Windows":
-            # Correct XML format for Windows netsh
             xml_template = f"""<?xml version="1.0"?>
 <WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
     <name>{ssid}</name>
-    <SSIDConfig>
-        <SSID>
-            <name>{ssid}</name>
-        </SSID>
-    </SSIDConfig>
+    <SSIDConfig><SSID><name>{ssid}</name></SSID></SSIDConfig>
     <connectionType>ESS</connectionType>
     <connectionMode>auto</connectionMode>
-    <MSM>
-        <security>
-            <authEncryption>
-                <authentication>WPA2PSK</authentication>
-                <encryption>AES</encryption>
-                <useOneX>false</useOneX>
-            </authEncryption>
-            <sharedKey>
-                <keyType>passPhrase</keyType>
-                <protected>false</protected>
-                <keyMaterial>{password}</keyMaterial>
-            </sharedKey>
-        </security>
-    </MSM>
+    <MSM><security>
+        <authEncryption><authentication>WPA2PSK</authentication><encryption>AES</encryption><useOneX>false</useOneX></authEncryption>
+        <sharedKey><keyType>passPhrase</keyType><protected>false</protected><keyMaterial>{password}</keyMaterial></sharedKey>
+    </security></MSM>
 </WLANProfile>"""
             try:
-                # Write temporary XML profile
                 with open("wifi.xml", "w") as f:
                     f.write(xml_template)
-                
-                # Execute commands
+                os.system("netsh wlan disconnect")
                 os.system('netsh wlan add profile filename="wifi.xml"')
                 os.system(f'netsh wlan connect name="{ssid}"')
-                
-                # Cleanup
                 if os.path.exists("wifi.xml"):
                     os.remove("wifi.xml")
                 return True
@@ -308,34 +323,63 @@ class PySerialNetworkHost:
                 return False
 
         elif sys_platform == "Linux":
-            # Using nmcli (Network Manager CLI)
-            try:
-                # Disconnect current first to ensure clean switch
-                os.system("nmcli dev disconnect wlan0")
-                if password:
-                    ret = os.system(f"nmcli dev wifi connect '{ssid}' password '{password}'")
-                else:
-                    ret = os.system(f"nmcli dev wifi connect '{ssid}'")
-                return ret == 0
-            except:
-                return False
+            iface = self.get_wifi_interface_linux()
+            print(f"[SYSTEM] Using Interface: {iface}")
+            
+            # Check if Raspberry Pi (might need wpa_cli instead of nmcli)
+            if self.is_raspberry_pi():
+                try:
+                    # Prefer nmcli first
+                    os.system(f"nmcli device disconnect {iface}")
+                    if password:
+                        ret = os.system(f"nmcli device wifi connect '{ssid}' password '{password}'")
+                    else:
+                        ret = os.system(f"nmcli device wifi connect '{ssid}'")
+                    if ret == 0: return True
+                except:
+                    pass # Fallback to wpa_cli below
+
+                # Fallback for RPi Lite (wpa_cli)
+                try:
+                    print("[SYSTEM] nmcli failed, trying wpa_cli...")
+                    os.system(f"wpa_cli -i {iface} disconnect")
+                    os.system(f"wpa_cli -i {iface} add_network")
+                    os.system(f"wpa_cli -i {iface} set_network 0 ssid '\"{ssid}\"'")
+                    if password:
+                        os.system(f"wpa_cli -i {iface} set_network 0 psk '\"{password}\"'")
+                    os.system(f"wpa_cli -i {iface} enable_network 0")
+                    return True
+                except Exception as e:
+                    print(f"[ERROR] RPi WiFi Config Failed: {e}")
+                    return False
+            else:
+                # Standard Linux (Ubuntu/Fedora etc)
+                try:
+                    os.system(f"nmcli device disconnect {iface}")
+                    if password:
+                        ret = os.system(f"nmcli device wifi connect '{ssid}' password '{password}'")
+                    else:
+                        ret = os.system(f"nmcli device wifi connect '{ssid}'")
+                    return ret == 0
+                except:
+                    return False
 
         elif sys_platform == "Darwin": # macOS
+            iface = self.get_wifi_interface_mac()
+            print(f"[SYSTEM] Using Interface: {iface}")
             try:
-                os.system("networksetup -setairportpower en0 off")
+                os.system(f"networksetup -setairportpower {iface} off")
                 time.sleep(1)
-                os.system("networksetup -setairportpower en0 on")
+                os.system(f"networksetup -setairportpower {iface} on")
                 if password:
-                    ret = os.system(f"networksetup -setairportnetwork en0 '{ssid}' '{password}'")
+                    ret = os.system(f"networksetup -setairportnetwork {iface} '{ssid}' '{password}'")
                 else:
-                    ret = os.system(f"networksetup -setairportnetwork en0 '{ssid}'")
+                    ret = os.system(f"networksetup -setairportnetwork {iface} '{ssid}'")
                 return ret == 0
             except:
                 return False
         
-        else:
-            print(f"[SYSTEM] Unsupported OS: {sys_platform}")
-            return False
+        return False
 
     def system_disconnect_wifi(self):
         sys_platform = platform.system()
@@ -344,11 +388,17 @@ class PySerialNetworkHost:
         if sys_platform == "Windows":
             os.system("netsh wlan disconnect")
         elif sys_platform == "Linux":
-            os.system("nmcli dev disconnect wlan0")
+            iface = self.get_wifi_interface_linux()
+            if self.is_raspberry_pi():
+                try:
+                    os.system(f"nmcli device disconnect {iface}")
+                except:
+                    os.system(f"wpa_cli -i {iface} disconnect")
+            else:
+                os.system(f"nmcli device disconnect {iface}")
         elif sys_platform == "Darwin": # macOS
-            os.system("networksetup -setairportpower en0 off")
-        else:
-            print("Unsupported OS")
+            iface = self.get_wifi_interface_mac()
+            os.system(f"networksetup -setairportpower {iface} off")
         return True
 
     def system_reboot(self):
@@ -402,7 +452,6 @@ class PySerialNetworkHost:
                 
                 print(f"[GLOBAL] Set WiFi Request: {ssid}")
                 
-                # Store for connection
                 self.wifi_ssid = ssid
                 self.wifi_pass = password
                 
@@ -416,8 +465,6 @@ class PySerialNetworkHost:
         elif cmd == CMD_C_CONNECT_NET:
             print(f"[GLOBAL] Connecting to WiFi: {self.wifi_ssid}...")
             if self.wifi_ssid:
-                # Trigger the actual system connection in a thread
-                # This avoids blocking the serial read loop
                 threading.Thread(target=self.system_set_wifi, args=(self.wifi_ssid, self.wifi_pass), daemon=True).start()
                 success = True
             else:
