@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  <b>The Arduino Serial bridge for TCP, UDP, and WebSocket Clients</b><br>
+  <b>The Arduino Serial bridge for TCP, UDP, WebSocket, and AsyncTCP Clients</b><br>
   Enable advanced network functionality on non-networked boards by bridging them to a WiFi‑capable device (ESP32/ESP8266) or a PC via USB.
 </p>
 
