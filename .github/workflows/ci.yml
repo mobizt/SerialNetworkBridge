@@ -14,49 +14,27 @@ jobs:
       matrix:
         include:
 
-          - name: "Client - HTTP GET (Uno)"
-            example: "examples/Basics/Client/ArduinoUNO_HTTP_GET/ArduinoUNO_HTTP_GET.ino"
-            board: uno
-            lib_deps: ""
-
-
           - name: "Client - MQTT (ESP32)"
-            example: "examples/Basics/Client/MQTT/MQTT.ino"
+            example: "examples/Device_Host/Generic_Client/MQTT/MQTT.ino"
             board: esp32dev
             lib_deps: "ArduinoMqttClient"
 
 
           - name: "Client - UDP NTP (ESP32)"
-            example: "examples/Features//UDP_NTP/Client/Client.ino"
+            example: "examples/Device_Host/Generic_Client/UDP_NTP/UDP_NTP.ino"
             board: esp32dev
             lib_deps: ""
 
           - name: "Client - WebSocket (ESP32)"
-            example: "examples/Features/Websocket/Client/Client.ino"
+            example: "examples/Device_Host/Generic_Client/WebSocket/WebSocket.ino"
             board: esp32dev
             lib_deps: ""
           
-          - name: "Host - Basic (ESP32)"
-            example: "examples/Basics/Host/Host.ino"
-            board: esp32dev
-            lib_deps: ""
-
-          - name: "Host - Secure Connection (ESP32)"
-            example: "examples/Features/SecureConnection/Host/Host.ino"
-            board: esp32dev
-            lib_deps: ""
-
-          - name: "Host - STARTTLS (ESP32)"
-            example: "examples/Features/STARTTLS/Host/Host.ino"
-            board: esp32dev
-            lib_deps: "ESP_SSLClient"
-
-          # Host - WebSocket (ESP32) - NEW
-          # Requires the native WebSockets library
-          - name: "Host - WebSocket (ESP32)"
-            example: "examples/Features/Websocket/Host/Host.ino"
+          - name: "Host (ESP32)"
+            example: "examples/Device_Host/Generic_Client/Host/Host.ino"
             board: esp32dev
             lib_deps: "Links2004/WebSockets"
+
 
     steps:
       - name: Checkout Code
