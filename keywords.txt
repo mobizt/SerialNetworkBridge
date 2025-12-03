@@ -1,16 +1,13 @@
 #######################################
-
-Syntax Coloring Map For SerialNetworkBridge
-
+# Syntax Coloring Map For SerialNetworkBridge
 #######################################
 
 #######################################
-
-Datatypes (KEYWORD1)
-
+# Datatypes (KEYWORD1)
 #######################################
 
 SerialTCPClient	KEYWORD1
+SerialAsyncTCPClient	KEYWORD1
 SerialUDPClient	KEYWORD1
 SerialWebsocketClient	KEYWORD1
 SerialNetworkHost	KEYWORD1
@@ -18,9 +15,7 @@ SerialHostManager	KEYWORD1
 SerialNetworkProtocol	KEYWORD1
 
 #######################################
-
-Methods and Functions (KEYWORD2)
-
+# Methods and Functions (KEYWORD2)
 #######################################
 
 setSlot	KEYWORD2
@@ -32,6 +27,7 @@ isSSL	KEYWORD2
 availableForWrite	KEYWORD2
 notifyBoot	KEYWORD2
 setTCPClient	KEYWORD2
+setAsyncClient	KEYWORD2
 setUDPClient	KEYWORD2
 setWebSocketClient	KEYWORD2
 setWebSocketCallback	KEYWORD2
@@ -57,11 +53,47 @@ onEvent	KEYWORD2
 sendText	KEYWORD2
 sendBinary	KEYWORD2
 pushWsEvent	KEYWORD2
+setCACert   KEYWORD2
+startTLS    KEYWORD2
+isSSL   KEYWORD2
+hostPrint   KEYWORD2
+setFlag KEYWORD2
+getFlag KEYWORD2
+setInsecure KEYWORD2
+setPlainStart   KEYWORD2
+isSecure    KEYWORD2
+setBufferSizes  KEYWORD2
+
+# AsyncTCP Specific
+ack	KEYWORD2
+ackPacket	KEYWORD2
+add	KEYWORD2
+send	KEYWORD2
+getMss	KEYWORD2
+getRxTimeout	KEYWORD2
+setRxTimeout	KEYWORD2
+getAckTimeout	KEYWORD2
+setAckTimeout	KEYWORD2
+getNoDelay	KEYWORD2
+setNoDelay	KEYWORD2
+setKeepAlive	KEYWORD2
+getRemoteAddress	KEYWORD2
+getRemotePort	KEYWORD2
+getLocalAddress	KEYWORD2
+getLocalPort	KEYWORD2
+onConnect	KEYWORD2
+onDisconnect	KEYWORD2
+onAck	KEYWORD2
+onError	KEYWORD2
+onData	KEYWORD2
+onPacket	KEYWORD2
+onTimeout	KEYWORD2
+onPoll	KEYWORD2
+errorToString	KEYWORD2
+stateToString	KEYWORD2
 
 #######################################
-
-Constants (LITERAL1)
-
+# Constants (LITERAL1)
 #######################################
 
 WSMessageType	LITERAL1

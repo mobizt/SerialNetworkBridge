@@ -43,15 +43,12 @@ Use your computer (Windows, Linux, macOS) or Raspberry Pi as the gateway via the
 
 ## ✨ Features
 
-- **Multi-Protocol Support:** Bridge **TCP**, **UDP**, and **WebSocket** clients via serial.
-- **Universal Compatibility:** Works with any interface implementing the `Stream` class (`HardwareSerial`, `SoftwareSerial`, `USBSerial`, etc.).
-- **PC Host Mode (v1.0.4):** Connect directly to a **PC/Raspberry Pi** via USB. The Python bridge now supports:
-    - **Real WiFi Control:** Connect/Disconnect PC Wi-Fi from the Arduino client.
-    - **System Control:** Reboot the bridge or the host machine via serial command.
-    - **Robust SSL:** Supports HTTPS, WSS, and STARTTLS with custom root certificates.
-- **Secure:** Support for **SSL/TLS** (HTTPS/WSS) and **STARTTLS** upgrades handled by the host.
-- **Performance:** Supports `NeoHWSerial` for high-performance interrupt-driven communication on AVR boards.
-- **Event-Driven:** WebSocket implementation supports async events and callbacks.
+- **Multi-Protocol Support:** Bridge **TCP**, **UDP**, **WebSocket**, and **AsyncTCP** clients via serial.
+- **Universal Compatibility:** Works with any interface implementing the `Stream` class.
+- **PC Host Mode:** Connect directly to a PC/Raspberry Pi via USB for internet access.
+- **Secure:** Support for **SSL/TLS** (HTTPS/WSS) and **STARTTLS**.
+- **Performance:** Supports `NeoHWSerial` for AVR.
+- **AsyncTCP Support (New):** Non-blocking, event-driven TCP for high-throughput applications (Requires Dual-Core ESP32 Host).
 
 ---
 
@@ -92,11 +89,11 @@ lib_deps =
 
 ## 🚀 Usage: The Client (Your Arduino)
 
-These sketches run on your non-networked board. They connect to the "Host" (ESP32 or PC) to access the internet.
+These sketches run on your non-networked board. They connect to the "Host" (Arduino device or PC) to access the internet.
 
 ### ⚠️ CRITICAL: PC Host Setup Rules
-If you are using the **PC USB Bridge**, you **must** follow these rules in your client sketch:
-1. **Disable Debugging:** Comment out `#define ENABLE_SERIALTCP_DEBUG`.
+If you are using the **PC Host Bridge**, you **must** follow these rules in your client sketch:
+1. **Using Relay Debug instead of System Debugging:** Comment out `#define ENABLE_LOCAL_DEBUG`. Use the predefined helper functions (`debug::prnt`, `debug::printRaw`, `debug::printNewLinr`) with `HOST_RELAY_DEBUG` to relay the debug message to PC terminal.
 2. **Use Main Serial:** Pass `Serial` (USB) to the client constructor.
 3. **Flush Bootloader:** Add `Serial.write(0x00); delay(500);` in `setup()`.
 4. **Explicit SSL:** Pass `true` as the 3rd argument to `connect()` for HTTPS (e.g., `client.connect("site.com", 443, true)`).
@@ -105,7 +102,7 @@ If you are using the **PC USB Bridge**, you **must** follow these rules in your 
 
 ```cpp
 // [PC Host] Comment out debug to prevent protocol corruption
-// #define ENABLE_SERIALTCP_DEBUG 
+// #define ENABLE_LOCAL_DEBUG 
 #include <SerialNetworkBridge.h>
 
 // Use Serial for PC Host, Serial2 for ESP32 Host
@@ -162,19 +159,52 @@ void loop() {
 }
 ```
 
+### 3. AsyncTCP Client Example
+Use this for non-blocking HTTP requests or high-performance streaming.
+
+```cpp
+#define USE_ASYNC_CLIENT // Required for Async support
+#define ENABLE_LOCAL_DEBUG 
+#include <SerialNetworkBridge.h>
+
+SerialAsyncTCPClient asyncClient(Serial1, 0); // Use Bridge Serial
+
+void onData(void* arg, SerialAsyncTCPClient* c, void* data, size_t len) {
+  Serial.print("Received: ");
+  Serial.write((uint8_t*)data, len);
+}
+
+void setup() {
+  Serial.begin(115200);
+
+  Serial1.begin(115200); // Bridge
+  
+  asyncClient.onData(onData);
+  asyncClient.onConnect([](void* arg, SerialAsyncTCPClient* c) {
+    c->write("GET / HTTP/1.1\r\nHost: example.com\r\n\r\n");
+  });
+  
+  asyncClient.connect("example.com", 80);
+}
+
+void loop() {
+  asyncClient.loop(); // Critical for event processing
+}
+```
+
 ---
 
 ## 🧩 Host Setup (Choose One)
 
 ### Option A: Microcontroller Host (ESP32/ESP8266)
 Upload the **Host** sketch to an ESP32/ESP8266. It bridges Serial traffic to WiFi.
-* **Example:** `examples/Basics/Host/Host.ino`
+* **Example:** `examples/Device_Host/Generic_Client/Host/Host.ino`
 
 ### Option B: PC / Raspberry Pi Host (Python)
 Use your computer as the bridge via USB! Supports real system network management.
 
 1.  **Install Dependencies:**
-    Navigate to `examples/Features/PC_USB_Host` and run:
+    Navigate to `examples/PC_Host` and run:
     * **Windows:** `install_libs.bat`
     * **Linux/Mac:** `./install_libs.sh`
 2.  **Configure:**
@@ -182,21 +212,12 @@ Use your computer as the bridge via USB! Supports real system network management
 3.  **Run:**
     * **Windows:** `run.bat` (Run as Administrator for WiFi/Reboot features).
     * **Linux/Mac:** `./run.sh` (Run with `sudo` for WiFi/Reboot features).
+    
 
----
-
-## 📂 Examples Directory
-
-| Folder | Description |
-| :--- | :--- |
-| **Basics/** | Standard examples for ESP32/ESP8266 Bridge. |
-| **Features/PC_USB_Host/** | Full suite of examples for PC/Python Bridge. |
-| &nbsp;&nbsp;├─ `serial_bridge.py` | The Python Bridge Script (v1.0.3+). |
-| &nbsp;&nbsp;├─ `HTTP_GET` / `POST` | Basic HTTP/HTTPS examples. |
-| &nbsp;&nbsp;├─ `WebSocket` | Connect to echo server with SSL. |
-| &nbsp;&nbsp;├─ `MQTT` | Secure MQTT (Port 8883) example. |
-| &nbsp;&nbsp;├─ `HostManagement` | **Control PC WiFi & Reboot from Arduino.** |
-| &nbsp;&nbsp;└─ `HTTP_Streaming` | SSE Client with local Python Server. |
+### ⚠️ Important Note for AsyncTCP (ESP32)
+If you use the `SerialAsyncTCPClient` feature, a **Dual-Core ESP32** (e.g., ESP32-WROOM, ESP32-S3) is strongly recommended. 
+* **Single-Core Devices (ESP32-C3, ESP32-S2):** May experience data packet loss or connection stalls (receiving only ~1400 bytes) due to CPU contention between the Network Stack and Serial processing.
+* **Recommendation:** Use the standard synchronous `SerialTCPClient` on single-core devices.
 
 ---
 

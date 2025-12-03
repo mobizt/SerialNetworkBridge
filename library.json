@@ -1,6 +1,6 @@
 {
   "name": "SerialNetworkBridge",
-  "version": "1.0.4",
+  "version": "2.0.0",
   "description": "A serial-to-network bridge allowing non-networked Arduino boards (Uno, Nano, STM32, etc.) to perform TCP, UDP, WebSocket, and SSL/TLS client operations via a WiFi-capable host (ESP32) or a PC/Raspberry Pi (Python).",
   "keywords": [
     "TCP",
@@ -34,5 +34,8 @@
   "platforms": "*",
   "headers": [
     "SerialNetworkBridge.h"
+  ],
+  "dependencies": [
+    "ArduinoMqttClient","WebSockets"
   ]
 }

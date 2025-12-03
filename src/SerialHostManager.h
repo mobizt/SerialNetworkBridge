@@ -1,4 +1,4 @@
-/*
+/**
  * SPDX-FileCopyrightText: 2025 Suwatchai K. <suwatchai@outlook.com>
  *
  * SPDX-License-Identifier: MIT
@@ -79,6 +79,40 @@ public:
     void setLocalDebugLevel(int level)
     {
         _serial_tcp_client.setLocalDebugLevelImpl(level);
+    }
+
+    /**
+     * @brief Printing message to Host Stream (Serial).
+     * @param info Information to print.
+     */
+    void hostPrint(const char *info)
+    {
+        size_t len = strlen(info);
+        size_t offset = 0;
+        // Use small chunk size to avoid flooding serial buffer all at once
+        const size_t CHUNK_SIZE = 64;
+
+        while (offset < len)
+        {
+            size_t toSend = len - offset;
+            if (toSend > CHUNK_SIZE)
+                toSend = CHUNK_SIZE;
+
+            // wait_for_ack = false: Fire and forget.
+            // This prevents blocking the Arduino waiting for a response while it might be
+            // receiving data on another slot, avoiding deadlock.
+            _serial_tcp_client.sendCommand(CMD_C_DEBUG_INFO, GLOBAL_SLOT_ID, (const uint8_t *)(info + offset), toSend, false);
+            offset += toSend;
+        }
+    }
+
+    /**
+     * @brief Printing message to Host Stream (Serial).
+     * @param info Information to print.
+     */
+    void hostPrint(String info) // Overload for String
+    {
+        hostPrint(info.c_str());
     }
 
 private:

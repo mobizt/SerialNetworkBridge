@@ -1,4 +1,4 @@
-/*
+/**
  * SPDX-FileCopyrightText: 2025 Suwatchai K. <suwatchai@outlook.com>
  *
  * SPDX-License-Identifier: MIT
@@ -11,7 +11,7 @@
 #include <Stream.h>
 
 // DEBUG
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
 #define DEBUG_PRINT(level, tag, message) \
     do                                   \
     {                                    \
@@ -27,8 +27,11 @@
 #endif
 // END DEBUG
 
+#if !defined(MAX_CLIENT_SLOTS)
+#define MAX_CLIENT_SLOTS 4
+#endif
+
 // Configuration
-// RAM Optimization for Low-Memory Boards (Uno, Nano, Mega)
 #if defined(__AVR__) || defined(ARDUINO_ARCH_AVR)
 #define SERIAL_TCP_RX_BUFFER_SIZE 256
 #define SERIAL_TCP_HOST_TX_BUFFER_SIZE 256
@@ -39,7 +42,7 @@ const size_t MAX_PACKET_BUFFER_SIZE = 128;
 // Defaults for ESP32, ESP8266, etc.
 #define SERIAL_TCP_RX_BUFFER_SIZE 1024
 #define SERIAL_TCP_HOST_TX_BUFFER_SIZE 1024
-#define SERIAL_TCP_DATA_PAYLOAD_SIZE 250
+#define SERIAL_TCP_DATA_PAYLOAD_SIZE 200
 #define SERIAL_UDP_RX_BUFFER_SIZE 1024
 const size_t MAX_PACKET_BUFFER_SIZE = 256;
 #endif
@@ -55,8 +58,16 @@ namespace SerialNetworkProtocol
     const uint8_t GLOBAL_SLOT_ID = 0xFF;
     const uint32_t DEFAULT_CMD_TIMEOUT = 5000;
     const uint32_t SERIAL_TCP_CONNECT_TIMEOUT = 30000;
-    const uint8_t MAX_SLOTS = 4; // Max number of independent network clients (TCP, UDP, WS)
+    const uint8_t MAX_SLOTS = MAX_CLIENT_SLOTS; // Max number of independent network clients (TCP, UDP, WS)
     const uint32_t AUTO_FLUSH_TIMEOUT_MS = 20;
+
+    // SSL Flag Bitmasks
+    // Bit 0: READ-ONLY status (set by Host). 1 = Secure Connection Active.
+    const uint8_t SSL_STATUS_BIT = 0x01;
+    // Bit 1: CONFIG (set by Client). 1 = Start in Plain Text mode (ignore SSL defaults).
+    const uint8_t SSL_PLAIN_START_BIT = 0x02;
+    // Bit 2: CONFIG (set by Client). 1 = Insecure Mode (Skip Verify).
+    const uint8_t SSL_INSECURE_BIT = 0x04;
 
     // WebSocket Message Types (for CMD_H_WS_EVENT)
     enum WSMessageType : uint8_t
@@ -79,6 +90,7 @@ namespace SerialNetworkProtocol
         CMD_C_SET_DEBUG = 0x05,
         CMD_C_PING_HOST = 0x06,
         CMD_C_REBOOT_HOST = 0x07,
+        CMD_C_DEBUG_INFO = 0x08,
 
         // Client -> Host TCP Commands (0x10 - 0x1F)
         CMD_C_CONNECT_HOST = 0x10,
@@ -104,6 +116,27 @@ namespace SerialNetworkProtocol
         CMD_C_WS_DISCONNECT = 0x32,
         CMD_C_WS_LOOP = 0x33, // Signal host to process WS events/data
 
+        // Client -> Host AsyncTCP Commands (0x40 - 0x5F)
+        CMD_C_ATC_CONNECT = 0x40,
+        CMD_C_ATC_CLOSE = 0x41,
+        CMD_C_ATC_ABORT = 0x42,
+        CMD_C_ATC_ADD = 0x43,
+        CMD_C_ATC_SEND = 0x44,
+        CMD_C_ATC_ACK = 0x45,
+        CMD_C_ATC_SET_RX_TIMEOUT = 0x46,
+        CMD_C_ATC_SET_ACK_TIMEOUT = 0x47,
+        CMD_C_ATC_SET_NO_DELAY = 0x48,
+        CMD_C_ATC_SET_KEEP_ALIVE = 0x49,
+
+        // Host -> Client AsyncTCP Events (0x50 - 0x6F)
+        CMD_H_ATC_CONNECTED = 0x50,
+        CMD_H_ATC_DISCONNECTED = 0x51,
+        CMD_H_ATC_DATA = 0x52,
+        CMD_H_ATC_ACKED = 0x53,
+        CMD_H_ATC_ERROR = 0x54,
+        CMD_H_ATC_TIMEOUT = 0x55,
+        CMD_H_ATC_POLL = 0x56,
+
         // Host -> Client Commands (0x80 - 0x9F)
         CMD_H_ACK = 0x80,
         CMD_H_NAK = 0x81,
@@ -122,6 +155,12 @@ namespace SerialNetworkProtocol
 
         // Host -> Client WebSocket Responses (0xB0 - 0xBF)
         CMD_H_WS_EVENT = 0xB0,
+
+        // Client <-> Host get/set value (0xC0 - 0xCF)
+        CMD_C_GET_FLAG = 0xC0,
+        CMD_C_SET_FLAG = 0xC1,      // Client sets flag on Host
+        CMD_H_FLAG_RESPONSE = 0xC2, // Host responds with flag value
+        CMD_C_SET_BUF_SIZE = 0xC3,  // Set Buffer Sizes
     };
 
     // CRC16-MODBUS Implementation

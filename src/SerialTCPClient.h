@@ -1,4 +1,4 @@
-/*
+/**
  * SPDX-FileCopyrightText: 2025 Suwatchai K. <suwatchai@outlook.com>
  *
  * SPDX-License-Identifier: MIT
@@ -17,9 +17,21 @@ using namespace SerialNetworkProtocol;
 
 // Buffers
 #if defined(__AVR__) || defined(ARDUINO_ARCH_AVR)
-#define SERIAL_TCP_TX_BUFFER_SIZE 128 // Reduced size for Uno
+// Max Packet Size: 128
+// bytesProtocol Overhead: 4
+// bytesMax Safe Buffer: 128 - 4 = 124 bytes
+// SERIAL_TCP_TX_BUFFER_SIZE should not exceed 124.
+// Setting the buffer to 120 (AVR) and 250 (Non-AVR) keeps the data safely under these limits,
+// ensuring flushTxBuffer() always succeeds.
+#define SERIAL_TCP_TX_BUFFER_SIZE 120 // Safe max buffer size
 #else
-#define SERIAL_TCP_TX_BUFFER_SIZE 256 // Full size for ESP32
+// Max Packet Size: 256 bytes
+// Protocol Overhead: 4 bytes
+// Max Safe Buffer: 256 - 4 = 252 bytes
+// SERIAL_TCP_TX_BUFFER_SIZE should not exceed 252.
+// Setting the buffer to 120 (AVR) and 250 (Non-AVR) keeps the data safely under these limits,
+// ensuring flushTxBuffer() always succeeds.
+#define SERIAL_TCP_TX_BUFFER_SIZE 250 // Safe max buffer size
 #endif
 
 class SerialTCPClient : public Client
@@ -31,6 +43,7 @@ private:
     int slot = 0;
     volatile bool _connected_status = false;
     volatile bool _is_ssl = false;
+    volatile bool _ssl_status = false;
 
     uint8_t _debug_level = 1;
 
@@ -54,6 +67,10 @@ private:
     volatile bool _ping_response_received = false;
     volatile bool _poll_response_received = false;
 
+    // Flag Handling
+    volatile bool _flag_response_received = false;
+    volatile uint8_t _received_flag = 0;
+
     uint16_t _host_session_id = 0;
 
     // Private: Packet Processing
@@ -74,21 +91,21 @@ private:
         {
             if (cmd == CMD_H_ACK)
             {
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
                 DEBUG_PRINT(_debug_level, "[Client]", "Global ACK received");
 #endif
                 _ack_received = true;
             }
             else if (cmd == CMD_H_NAK)
             {
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
                 DEBUG_PRINT(_debug_level, "[Client]", "Global NAK received");
 #endif
                 _nak_received = true;
             }
             else if (cmd == CMD_H_PING_RESPONSE)
             {
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
                 DEBUG_PRINT(_debug_level, "[Client]", "Global PING_RESPONSE received");
 #endif
                 _ping_response_received = true;
@@ -98,7 +115,7 @@ private:
                 if (len >= 4)
                 {
                     uint16_t new_id = (uint16_t)(pkt[2] << 8) | pkt[3];
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
                     // Removed String concatenation
                     DEBUG_PRINT(_debug_level, "[Client]", "Received HOST RESET");
 #endif
@@ -127,13 +144,13 @@ private:
         switch (cmd)
         {
         case CMD_H_ACK:
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
             DEBUG_PRINT(_debug_level, "[Client]", "Control ACK received");
 #endif
             _ack_received = true;
             break;
         case CMD_H_NAK:
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
             DEBUG_PRINT(_debug_level, "[Client]", "Control NAK received");
 #endif
             _nak_received = true;
@@ -143,7 +160,7 @@ private:
             _connected_status = (bool)pkt[2];
             if (!_connected_status)
                 _is_ssl = false; // Reset SSL on disconnect
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
             if (_connected_status)
                 DEBUG_PRINT(_debug_level, "[Client]", "Got Host-Push Status: Connected");
             else
@@ -180,7 +197,7 @@ private:
         {
             size_t data_len = len - 4; // cmd, slot, crc_lo, crc_hi
             const uint8_t *payload = &pkt[2];
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
             DEBUG_PRINT(_debug_level, "[Client]", "Got Host-Push Data");
 #endif
 
@@ -194,18 +211,29 @@ private:
                 }
                 else
                 {
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
                     DEBUG_PRINT(_debug_level, "[Client]", "ERROR: RX Buffer Overflow!");
 #endif
                 }
             }
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
             DEBUG_PRINT(_debug_level, "[Client]", "Sending Data ACK");
 #endif
             sendPacket(*sink, CMD_C_DATA_ACK, this->slot, nullptr, 0);
 
             break;
         }
+
+        case CMD_H_FLAG_RESPONSE:
+            if (len >= 3)
+            {
+                _received_flag = pkt[2];
+                _flag_response_received = true;
+#if defined(ENABLE_LOCAL_DEBUG)
+                DEBUG_PRINT(_debug_level, "[Client]", "Got Flag Response");
+#endif
+            }
+            break;
 
         case CMD_H_NET_STATUS:
             // TODO: Handle global status
@@ -218,7 +246,7 @@ private:
         uint32_t start = millis();
         _ack_received = false;
         _nak_received = false;
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
         DEBUG_PRINT(_debug_level, "[Client]", "Waiting for ACK...");
 #endif
 
@@ -231,7 +259,7 @@ private:
                 return false;
             delay(1);
         }
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
         DEBUG_PRINT(_debug_level, "[Client]", "ERROR: ACK Timeout!");
 #endif
         return false;
@@ -255,7 +283,7 @@ private:
     {
         uint32_t start = millis();
         _ping_response_received = false;
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
         DEBUG_PRINT(_debug_level, "[Client]", "Waiting for PING_RESPONSE...");
 #endif
 
@@ -266,8 +294,28 @@ private:
                 return true;
             delay(1);
         }
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
         DEBUG_PRINT(_debug_level, "[Client]", "ERROR: PING Timeout!");
+#endif
+        return false;
+    }
+
+    bool awaitFlagResponse(uint32_t timeout)
+    {
+        uint32_t start = millis();
+        _flag_response_received = false;
+#if defined(ENABLE_LOCAL_DEBUG)
+        DEBUG_PRINT(_debug_level, "[Client]", "Waiting for FLAG_RESPONSE...");
+#endif
+        while (millis() - start < timeout)
+        {
+            maintenance();
+            if (_flag_response_received)
+                return true;
+            delay(1);
+        }
+#if defined(ENABLE_LOCAL_DEBUG)
+        DEBUG_PRINT(_debug_level, "[Client]", "ERROR: Flag Timeout!");
 #endif
         return false;
     }
@@ -279,12 +327,14 @@ private:
 
         _ack_received = false;
         _nak_received = false;
-#if defined(ENABLE_SERIALTCP_DEBUG)
-        DEBUG_PRINT(_debug_level, "[Client]", "Sending command...");
+#if defined(ENABLE_LOCAL_DEBUG)
+        char msg[50];
+        snprintf(msg, sizeof(msg), "Sending TCP command: %02X for slot %d", cmd, slot);
+        DEBUG_PRINT(_debug_level, "[Client]", msg);
 #endif
         if (sendPacket(*sink, cmd, slot, payload, len) == 0)
         {
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
             DEBUG_PRINT(_debug_level, "[Client]", "ERROR: sendPacket failed!");
 #endif
             return false;
@@ -310,7 +360,7 @@ private:
         {
             return true;
         }
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
         DEBUG_PRINT(_debug_level, "[Client]", "Flushing TX buffer...");
 #endif
 
@@ -326,7 +376,7 @@ private:
         if (!success)
         {
             _connected_status = false;
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
             DEBUG_PRINT(_debug_level, "[Client]", "ERROR: flushTxBuffer failed!");
 #endif
         }
@@ -448,7 +498,7 @@ private:
                     }
                     else
                     {
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
                         DEBUG_PRINT(_debug_level, "[Client]", "ERROR: Bad CRC!");
 #endif
                     }
@@ -457,10 +507,11 @@ private:
         }
 
         // Check for TX auto-flush (for MQTT)
+        // Buffer Not Full (_tx_buffer_len < SERIAL_TCP_TX_BUFFER_SIZE): Sent automatically after 20ms
         if (_tx_buffer_len > 0 && _last_tx_activity_ms > 0 &&
             (millis() - _last_tx_activity_ms > AUTO_FLUSH_TIMEOUT_MS))
         {
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
             DEBUG_PRINT(_debug_level, "[Client]", "Auto-flushing TX buffer...");
 #endif
             flushTxBuffer();
@@ -607,7 +658,7 @@ public:
         size_t len = strlen(filename);
         if (len == 0 || len > 200)
             return false;
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
         DEBUG_PRINT(_debug_level, "[Client]", "Sending SET_CA_CERT command...");
 #endif
         return sendCommand(CMD_C_SET_CA_CERT, this->slot, (const uint8_t *)filename, len, true);
@@ -622,12 +673,12 @@ public:
             return false;
         if (_is_ssl)
             return true;
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
         DEBUG_PRINT(_debug_level, "[Client]", "Sending STARTTLS command...");
 #endif
         if (sendCommand(CMD_C_START_TLS, this->slot, nullptr, 0, true, SERIAL_TCP_CONNECT_TIMEOUT))
         {
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
             DEBUG_PRINT(_debug_level, "[Client]", "STARTTLS successful.");
 #endif
             _is_ssl = true;
@@ -635,7 +686,7 @@ public:
         }
         else
         {
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
             DEBUG_PRINT(_debug_level, "[Client]", "ERROR: STARTTLS failed (NAK or Timeout).");
 #endif
             return false;
@@ -675,9 +726,10 @@ public:
         size_t written = 0;
         for (size_t i = 0; i < size; i++)
         {
+            // Flush immediately if buffer full
             if (_tx_buffer_len >= SERIAL_TCP_TX_BUFFER_SIZE)
             {
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
                 DEBUG_PRINT(_debug_level, "[Client]", "TX buffer full, flushing...");
 #endif
                 if (!flushTxBuffer())
@@ -849,6 +901,122 @@ public:
     operator bool() override
     {
         return connected();
+    }
+
+    /**
+     * @brief Printing message to Host Stream (Serial).
+     * @param info Information to print.
+     */
+    void hostPrint(const char *info)
+    {
+        size_t len = strlen(info);
+        size_t offset = 0;
+        // Use small chunk size to avoid flooding serial buffer all at once
+        const size_t CHUNK_SIZE = 64;
+
+        while (offset < len)
+        {
+            size_t toSend = len - offset;
+            if (toSend > CHUNK_SIZE)
+                toSend = CHUNK_SIZE;
+
+            // wait_for_ack = false: Fire and forget.
+            // This prevents blocking the Arduino waiting for a response while it might be
+            // receiving data on another slot, avoiding deadlock.
+            sendCommand(CMD_C_DEBUG_INFO, GLOBAL_SLOT_ID, (const uint8_t *)(info + offset), toSend, false);
+            offset += toSend;
+        }
+    }
+
+    /**
+     * @brief Printing message to Host Stream (Serial).
+     * @param info Information to print.
+     */
+    void hostPrint(String info) // Overload for String
+    {
+        hostPrint(info.c_str());
+    }
+
+    /**
+     * @brief Sets the custom 8-bit flag on the Host bridge for this slot.
+     * @param flag The 8-bit value to set.
+     * @return true if successful (ACK received), false otherwise.
+     */
+    bool setFlag(uint8_t flag)
+    {
+        return sendCommand(CMD_C_SET_FLAG, this->slot, &flag, 1, true);
+    }
+
+    /**
+     * @brief Gets the custom 8-bit flag from the Host bridge for this slot.
+     * @return The 8-bit flag value (defaults to 0 if request fails).
+     */
+    uint8_t getFlag()
+    {
+        // Send request, don't wait for ACK (CMD_H_ACK), but expect response packet (CMD_H_FLAG_RESPONSE)
+        if (sendCommand(CMD_C_GET_FLAG, this->slot, nullptr, 0, false))
+        {
+            if (awaitFlagResponse(DEFAULT_CMD_TIMEOUT))
+            {
+                return _received_flag;
+            }
+        }
+        return 0; // Default or Error
+    }
+
+    /**
+     * @brief Sets the insecure flag (bit 2) to skip SSL certificate verification.
+     * @param insecure True to disable verification, false to enable it.
+     */
+    void setInsecure(bool insecure = true)
+    {
+        uint8_t flag = getFlag();
+        if (insecure)
+            flag |= SSL_INSECURE_BIT;
+        else
+            flag &= ~SSL_INSECURE_BIT;
+        setFlag(flag);
+    }
+
+    /**
+     * @brief Sets the plain start flag (bit 1) to force SSL client to start in plain mode.
+     * @param plain True to start in plain text, false to start in SSL (if configured).
+     */
+    void setPlainStart(bool plain = true)
+    {
+        uint8_t flag = getFlag();
+        if (plain)
+            flag |= SSL_PLAIN_START_BIT;
+        else
+            flag &= ~SSL_PLAIN_START_BIT;
+        setFlag(flag);
+    }
+
+    /**
+     * @brief Checks if the remote host reports the connection is secure.
+     * @return True if secure (SSL/TLS), false if plain text.
+     */
+    bool isSecure()
+    {
+        uint8_t flag = getFlag();
+        return (flag & SSL_STATUS_BIT) != 0;
+    }
+
+    /**
+     * @brief Sets the Receive and Transmit buffer sizes for the SSL client on the host.
+     * @param recv The receive buffer size in bytes.
+     * @param xmit The transmit buffer size in bytes.
+     */
+    void setBufferSizes(int recv, int xmit)
+    {
+        uint8_t payload[4];
+        payload[0] = (uint8_t)((recv >> 8) & 0xFF);
+        payload[1] = (uint8_t)(recv & 0xFF);
+        payload[2] = (uint8_t)((xmit >> 8) & 0xFF);
+        payload[3] = (uint8_t)(xmit & 0xFF);
+
+        // Send command and wait for ACK
+        sendCommand(CMD_C_SET_BUF_SIZE, this->slot, payload, 4, true);
     }
 
 #if defined(ENABLE_SERIALTCP_CHUNKED_DECODING)

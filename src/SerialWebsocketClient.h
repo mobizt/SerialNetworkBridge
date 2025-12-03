@@ -1,4 +1,4 @@
-/*
+/**
  * SPDX-FileCopyrightText: 2025 Suwatchai K. <suwatchai@outlook.com>
  *
  * SPDX-License-Identifier: MIT
@@ -47,6 +47,11 @@ private:
     volatile bool _ack_received = false;
     volatile bool _nak_received = false;
     volatile bool _ping_response_received = false;
+
+    // Flag Handling
+    volatile bool _flag_response_received = false;
+    volatile uint8_t _received_flag = 0;
+
     uint8_t _debug_level = 1;
 
     void maintenance()
@@ -78,7 +83,7 @@ private:
                     }
                     else
                     {
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
                         DEBUG_PRINT(_debug_level, "[Client]", "CRC Error");
 #endif
                     }
@@ -98,7 +103,7 @@ private:
         {
             if (cmd == CMD_H_PING_RESPONSE)
             {
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
                 DEBUG_PRINT(_debug_level, "[Client]", "Global PING_RESPONSE received");
 #endif
                 _ping_response_received = true;
@@ -112,13 +117,13 @@ private:
         switch (cmd)
         {
         case CMD_H_ACK:
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
             DEBUG_PRINT(_debug_level, "[Client]", "ACK received");
 #endif
             _ack_received = true;
             break;
         case CMD_H_NAK:
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
             DEBUG_PRINT(_debug_level, "[Client]", "NAK received");
 #endif
             _nak_received = true;
@@ -130,7 +135,7 @@ private:
                 const uint8_t *payload = &pkt[3];
                 size_t p_len = len - 5;
 
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
                 DEBUG_PRINT(_debug_level, "[Client]", "WS Event received");
 #endif
 
@@ -159,6 +164,16 @@ private:
                 }
             }
             break;
+        case CMD_H_FLAG_RESPONSE:
+            if (len >= 3)
+            {
+                _received_flag = pkt[2];
+                _flag_response_received = true;
+#if defined(ENABLE_LOCAL_DEBUG)
+                DEBUG_PRINT(_debug_level, "[Client]", "Got Flag Response");
+#endif
+            }
+            break;
         }
     }
 
@@ -168,7 +183,7 @@ private:
         _ack_received = false;
         _nak_received = false;
 
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
         DEBUG_PRINT(_debug_level, "[Client]", "Waiting for ACK...");
 #endif
 
@@ -182,7 +197,7 @@ private:
             delay(1);
         }
 
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
         DEBUG_PRINT(_debug_level, "[Client]", "ACK Timeout!");
 #endif
 
@@ -194,7 +209,7 @@ private:
         uint32_t start = millis();
         _ping_response_received = false;
 
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
         DEBUG_PRINT(_debug_level, "[Client]", "Waiting for PING_RESPONSE...");
 #endif
 
@@ -206,10 +221,30 @@ private:
             delay(1);
         }
 
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
         DEBUG_PRINT(_debug_level, "[Client]", "PING Timeout!");
 #endif
 
+        return false;
+    }
+
+    bool awaitFlagResponse(uint32_t timeout)
+    {
+        uint32_t start = millis();
+        _flag_response_received = false;
+#if defined(ENABLE_LOCAL_DEBUG)
+        DEBUG_PRINT(_debug_level, "[Client]", "Waiting for FLAG_RESPONSE...");
+#endif
+        while (millis() - start < timeout)
+        {
+            maintenance();
+            if (_flag_response_received)
+                return true;
+            delay(1);
+        }
+#if defined(ENABLE_LOCAL_DEBUG)
+        DEBUG_PRINT(_debug_level, "[Client]", "ERROR: Flag Timeout!");
+#endif
         return false;
     }
 
@@ -220,18 +255,18 @@ private:
         _ack_received = false;
         _nak_received = false;
 
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
         if (cmd != CMD_C_WS_LOOP)
         { // Avoid spamming logs with loop commands
             char msg[50];
-            snprintf(msg, sizeof(msg), "Sending cmd %02X...", cmd);
+            snprintf(msg, sizeof(msg), "Sending WS command: %02X for slot %d", cmd, slot);
             DEBUG_PRINT(_debug_level, "[Client]", msg);
         }
 #endif
 
         if (sendPacket(*sink, cmd, slot, payload, len) == 0)
         {
-#if defined(ENABLE_SERIALTCP_DEBUG)
+#if defined(ENABLE_LOCAL_DEBUG)
             DEBUG_PRINT(_debug_level, "[Client]", "Send packet failed");
 #endif
             return false;
@@ -347,6 +382,14 @@ public:
     }
 
     /**
+     * @brief Alias for disconnect(), stops the WebSocket connection.
+     */
+    void stop()
+    {
+        disconnect();
+    }
+
+    /**
      * @brief Checks the connection status.
      * @return true if the WebSocket is connected, false otherwise.
      */
@@ -374,6 +417,119 @@ public:
      * @param level The debug level (0 = none, higher = more verbose).
      */
     void setLocalDebugLevel(int level) { _debug_level = (uint8_t)level; }
+
+    /**
+     * @brief Printing message to Host Stream (Serial).
+     * @param info Information to print.
+     */
+    void hostPrint(const char *info)
+    {
+        size_t len = strlen(info);
+        size_t offset = 0;
+        // Use small chunk size to avoid flooding serial buffer all at once
+        const size_t CHUNK_SIZE = 64;
+
+        while (offset < len)
+        {
+            size_t toSend = len - offset;
+            if (toSend > CHUNK_SIZE)
+                toSend = CHUNK_SIZE;
+
+            // wait_for_ack = false: Fire and forget.
+            // This prevents blocking the Arduino waiting for a response while it might be
+            // receiving data on another slot, avoiding deadlock.
+            sendCommand(CMD_C_DEBUG_INFO, GLOBAL_SLOT_ID, (const uint8_t *)(info + offset), toSend, false);
+            offset += toSend;
+        }
+    }
+
+    /**
+     * @brief Printing message to Host Stream (Serial).
+     * @param info Information to print.
+     */
+    void hostPrint(String info) // Overload for String
+    {
+        hostPrint(info.c_str());
+    }
+
+    /**
+     * @brief Sets the custom 8-bit flag on the Host bridge for this slot.
+     * @param flag The 8-bit value to set.
+     * @return true if successful (ACK received), false otherwise.
+     */
+    bool setFlag(uint8_t flag)
+    {
+        return sendCommand(CMD_C_SET_FLAG, this->slot, &flag, 1, true);
+    }
+
+    /**
+     * @brief Gets the custom 8-bit flag from the Host bridge for this slot.
+     * @return The 8-bit flag value (defaults to 0 if request fails).
+     */
+    uint8_t getFlag()
+    {
+        if (sendCommand(CMD_C_GET_FLAG, this->slot, nullptr, 0, false))
+        {
+            if (awaitFlagResponse(DEFAULT_CMD_TIMEOUT))
+            {
+                return _received_flag;
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * @brief Sets the insecure flag (bit 2) to skip SSL certificate verification.
+     * @param insecure True to disable verification, false to enable it.
+     */
+    void setInsecure(bool insecure = true)
+    {
+        uint8_t flag = getFlag();
+        if (insecure)
+            flag |= SSL_INSECURE_BIT;
+        else
+            flag &= ~SSL_INSECURE_BIT;
+        setFlag(flag);
+    }
+
+    /**
+     * @brief Sets the plain start flag (bit 1) to force SSL client to start in plain mode.
+     * @param plain True to start in plain text, false to start in SSL (if configured).
+     */
+    void setPlainStart(bool plain = true)
+    {
+        uint8_t flag = getFlag();
+        if (plain)
+            flag |= SSL_PLAIN_START_BIT;
+        else
+            flag &= ~SSL_PLAIN_START_BIT;
+        setFlag(flag);
+    }
+
+    /**
+     * @brief Checks if the remote host reports the connection is secure.
+     * @return True if secure (SSL/TLS), false if plain text.
+     */
+    bool isSecure()
+    {
+        uint8_t flag = getFlag();
+        return (flag & SSL_STATUS_BIT) != 0;
+    }
+
+    /**
+     * @brief Sets the Receive and Transmit buffer sizes for the socket on the host.
+     * @param recv The receive buffer size in bytes.
+     * @param xmit The transmit buffer size in bytes.
+     */
+    void setBufferSizes(int recv, int xmit)
+    {
+        uint8_t payload[4];
+        payload[0] = (uint8_t)((recv >> 8) & 0xFF);
+        payload[1] = (uint8_t)(recv & 0xFF);
+        payload[2] = (uint8_t)((xmit >> 8) & 0xFF);
+        payload[3] = (uint8_t)(xmit & 0xFF);
+        sendCommand(CMD_C_SET_BUF_SIZE, this->slot, payload, 4, true);
+    }
 };
 
 #endif // SERIAL_WEBSOCKET_CLIENT_H
