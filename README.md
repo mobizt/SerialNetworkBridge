@@ -4,7 +4,7 @@
 
 <h1 align="center">SerialNetworkBridge</h1>
 
-<p align="center"><a href="https://www.arduino.cc/"><img src="https://img.shields.io/badge/Arduino-Library-blue.svg" alt="Arduino Library"></a><a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT"></a><img src="https://img.shields.io/badge/Version-2.0.0-orange.svg" alt="Version 2.0.0"></p>
+<p align="center"><a href="https://www.arduino.cc/"><img src="https://img.shields.io/badge/Arduino-Library-blue.svg" alt="Arduino Library"></a> <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT"></a> <img src="https://img.shields.io/badge/Version-2.0.0-orange.svg" alt="Version 2.0.0"></p>
 
 <p align="center">
   <b>The Arduino Serial bridge for TCP, UDP, WebSocket, and AsyncTCP Clients</b><br>
